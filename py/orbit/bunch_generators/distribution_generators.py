@@ -8,6 +8,7 @@ This is not a parallel version! ???
 import math
 import random
 import sys
+import numpy as np
 
 class TwissContainer:
 	""" 
@@ -297,7 +298,6 @@ class GaussDist2D:
 		""" Returns the (twissX,twissY) containers. """
 		return (self.twissX,self.twissY)		
 		
-		
 class GaussDist3D:
 	"""
 	Generates the 3D Gauss distribution. exp(-x**2/(2*sigma**2)) The cut_off value is x_cutoff/sigma.
@@ -324,7 +324,82 @@ class GaussDist3D:
 		
 	def getTwissContainers(self):
 		""" Returns the (twissX,twissY,twissZ) containers. """
-		return (self.twissX,self.twissY,self.twissZ)				
+		return (self.twissX,self.twissY,self.twissZ)
+        
+class DanilovDist2D:
+    """Generate the {2, 2} Danilov distribution.
+    
+    Parameters
+    ----------
+    twiss_x{y} : tuple
+        The Twiss parameters(alpha, beta, emittance).
+    nu : float
+        The x-y phase difference for all particles in the beam.
+    rot_dir : str
+        The rotation direction of the beam in normalized space. We define
+        normalized space as one in which the projections onto x-x', y-y',
+        x-y, and x'-y' are unit circles, and the projections onto
+        x-y' and y-x' are lines with slope +/- 1. Options: {'cw', 'ccw'}.
+
+    Attributes
+    ----------
+    params : NumPy array, shape (8,)
+        The envelope parameters [a, b, a', b', e, f, e', f'].
+        
+    References
+    ----------
+    V. Danilov, S. Cousineau, S. Henderson, and J. Holmes, Self-consistent
+    time dependent two dimensional and three dimensional space charge
+    distributions with linear force, Physical Review Special Topics -
+    Accelerators and Beams 6, 74–85 (2003).
+    """
+    
+    def __init__(self, twiss_x, twiss_y, nu=np.pi/2, rot_dir='ccw'):
+
+        (alpha_x, beta_x, eps_x), (alpha_y, beta_y, eps_y)= twiss_x, twiss_y
+        R = phase_space_rotation_matrix(nu - np.pi/2, 0.0)
+        A = np.sqrt(4 * np.diag([eps_x, eps_x, eps_y, eps_y]))
+        V = norm_mat_4D(alpha_x, beta_x, alpha_y, beta_y)
+        # Get envelope parameters
+        if rot_dir == 'ccw':
+            P = np.array([[1, 0], [0, 1], [0, -1], [+1, 0]])
+        elif rot_dir == 'cw':
+            P = np.array([[1, 0], [0, 1], [0, +1], [-1, 0]])
+        self.params = np.linalg.multi_dot([V, A, R, P]).flatten()
+        
+    def get_coords(self):
+        """Return the transverse phase space coordinates."""
+        rho = np.sqrt(np.random.random())
+        psi = 2 * np.pi * np.random.random()
+        sin, cos = np.sin(psi), np.cos(psi)
+        a, b, ap, bp, e, f, ep, fp = self.params
+        x = rho * (a*sin + b*cos)
+        y = rho * (e*sin + f*cos)
+        xp = rho * (ap*sin + bp*cos)
+        yp = rho * (ep*sin + fp*cos)
+        return x, xp, y, yp
+
+
+#--------------------------------------------------
+# Helper functions
+#--------------------------------------------------
+def rotation_matrix(phi):
+    return np.array([[np.cos(phi), np.sin(phi)], [-np.sin(phi), np.cos(phi)]])
+
+def phase_space_rotation_matrix(phi_x, phi_y):
+    R = np.zeros((4, 4))
+    R[:2, :2] = rotation_matrix(phi_x)
+    R[2:, 2:] = rotation_matrix(phi_y)
+    return R
+
+def norm_mat_2D(alpha, beta):
+    return np.array([[beta, 0.0], [-alpha, 1.0]]) / np.sqrt(beta)
+
+def norm_mat_4D(alpha_x, beta_x, alpha_y, beta_y):
+    V = np.zeros((4, 4))
+    V[:2, :2] = norm_mat_2D(alpha_x, beta_x)
+    V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
+    return V
 	
 #--------------------------------------------------
 # Auxilary classes 
