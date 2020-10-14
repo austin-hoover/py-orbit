@@ -7,6 +7,7 @@ This script tracks the 2D rotating distribution through a FODO cell using the
 # Imports
 #------------------------------------------------------------------------------
 import numpy as np
+from matplotlib import pyplot as plt
 
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D, EnvSolverRotating
@@ -110,21 +111,19 @@ for i in range(nturns + 1):
         beam_dims[i, 2], env_dims[i, 2]
     )
     
-# Uncomment below to plot results
-#------------------------------------------------------------------------------
+# Plotting
+# ------------------------------------------------------------------------------
 
-# from matplotlib import pyplot as plt
-
-# fig, axes = plt.subplots(1, 3, sharex=True, figsize=(10, 3))
-# for i, ax in enumerate(axes):
-#     ax.plot(env_dims[:, i], 'k--', lw=0.5)
-#     ax.plot(beam_dims[:, i], 'r+', lw=0)
-#     ax.set_xlabel('Turn number')
-# ax1, ax2, ax3 = axes
-# ax1.set_ylabel(r'[${mm}^2$]')
-# ax1.set_title(r'$\langle{x^2}\rangle$')
-# ax2.set_title(r'$\langle{y^2}\rangle$')
-# ax3.set_title(r'$\langle{xy}\rangle$')
-# ax3.legend(labels=['Envelope', 'FFT'], fontsize='small')
-# fig.set_tight_layout(True)
-# plt.savefig('rot_benchmark.png', dpi=200)
+fig, axes = plt.subplots(1, 3, sharex=True, figsize=(10, 3))
+for i, ax in enumerate(axes):
+    ax.plot(env_dims[:, i], 'k--', lw=0.5)
+    ax.plot(beam_dims[:, i], 'r+', lw=0)
+    ax.set_xlabel('Turn number')
+ax1, ax2, ax3 = axes
+ax1.set_ylabel(r'[${mm}^2$]')
+ax1.set_title(r'$\langle{x^2}\rangle$')
+ax2.set_title(r'$\langle{y^2}\rangle$')
+ax3.set_title(r'$\langle{xy}\rangle$')
+ax3.legend(labels=['Envelope', 'FFT'], fontsize='small')
+fig.set_tight_layout(True)
+plt.savefig('rot_benchmark.png', dpi=200)

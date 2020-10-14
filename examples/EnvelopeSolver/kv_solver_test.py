@@ -7,6 +7,7 @@ space charge model and compares the results with the envelope model.
 # Imports
 #------------------------------------------------------------------------------
 import numpy as np
+from matplotlib import pyplot as plt
 
 from bunch import Bunch
 from spacecharge import SpaceChargeCalc2p5D, EnvSolverKV
@@ -113,18 +114,16 @@ for i in range(nturns + 1):
 # Uncomment below to plot results
 #------------------------------------------------------------------------------
 
-# from matplotlib import pyplot as plt
+fig, axes = plt.subplots(1, 2, sharey=True, figsize=(8, 3))
+for i, ax in enumerate(axes):
+    ax.plot(env_dims[:, i], 'k--', lw=0.5)
+    ax.plot(beam_dims[:, i], marker='+', lw=0, color='red')
+    ax.set_xlabel('Turn number')
+axes[0].set_ylabel(r'[${mm}^2$]')
+axes[0].set_title(r'$\langle{x^2}\rangle$')
+axes[1].set_title(r'$\langle{y^2}\rangle$')
+axes[1].legend(labels=['Envelope', 'FFT'])
+fig.set_tight_layout(True)
+plt.savefig('kv_benchmark.png', dpi=200)
 
-# fig, axes = plt.subplots(1, 2, sharey=True, figsize=(8, 3))
-# for i, ax in enumerate(axes):
-#     ax.plot(env_dims[:, i], 'k--', lw=0.5)
-#     ax.plot(beam_dims[:, i], marker='+', lw=0, color='red')
-#     ax.set_xlabel('Turn number')
-# axes[0].set_ylabel(r'[${mm}^2$]')
-# axes[0].set_title(r'$\langle{x^2}\rangle$')
-# axes[1].set_title(r'$\langle{y^2}\rangle$')
-# axes[1].legend(labels=['Envelope', 'FFT'])
-# fig.set_tight_layout(True)
-# plt.savefig('kv_benchmark.png', dpi=200)
-
-# print "Results shown in 'kv_benchmark.png'"
+print "Results shown in 'kv_benchmark.png'"
