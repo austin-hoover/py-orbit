@@ -328,32 +328,32 @@ class GaussDist3D:
         return (self.twissX,self.twissY,self.twissZ)
         
 class DanilovDist2D:
-#    """Generate the {2, 2} Danilov distribution.
-#
-#    Parameters
-#    ----------
-#    twiss_x{y} : tuple
-#        The Twiss parameters(alpha, beta, emittance).
-#    nu : float
-#        The x-y phase difference for all particles in the beam.
-#    rot_dir : str
-#        The rotation direction of the beam in normalized space. We define
-#        normalized space as one in which the projections onto x-x', y-y',
-#        x-y, and x'-y' are unit circles, and the projections onto
-#        x-y' and y-x' are lines with slope +/- 1. Options: {'cw', 'ccw'}.
-#
-#    Attributes
-#    ----------
-#    params : NumPy array, shape (8,)
-#        The envelope parameters [a, b, a', b', e, f, e', f'].
-#
-#    References
-#    ----------
-#    V. Danilov, S. Cousineau, S. Henderson, and J. Holmes, Self-consistent
-#    time dependent two dimensional and three dimensional space charge
-#    distributions with linear force, Physical Review Special Topics -
-#    Accelerators and Beams 6, 74–85 (2003).
-#    """
+    """Generate the {2, 2} Danilov distribution.
+
+    Parameters
+    ----------
+    twiss_x{y} : tuple
+        The Twiss parameters(alpha, beta, emittance).
+    nu : float
+        The x-y phase difference for all particles in the beam.
+    rot_dir : str
+        The rotation direction of the beam in normalized space. We define
+        normalized space as one in which the projections onto x-x', y-y',
+        x-y, and x'-y' are unit circles, and the projections onto
+        x-y' and y-x' are lines with slope +/- 1. Options: {'cw', 'ccw'}.
+
+    Attributes
+    ----------
+    params : NumPy array, shape (8,)
+        The envelope parameters [a, b, a', b', e, f, e', f'].
+
+    References
+    ----------
+    V. Danilov, S. Cousineau, S. Henderson, and J. Holmes, Self-consistent
+    time dependent two dimensional and three dimensional space charge
+    distributions with linear force, Physical Review Special Topics -
+    Accelerators and Beams 6, 74–85 (2003).
+    """
     
     def __init__(self, twiss_x, twiss_y, nu=np.pi/2, rot_dir='ccw'):
 
