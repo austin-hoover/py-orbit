@@ -7,8 +7,8 @@ class EnvSolverNode(SC_Base_AccNode):
     def __init__(self, sc_calculator, name='no name'):
         """Class implementation of envelope solver node.
     
-        sc_calculator : EnvSolverKV or EnvSolverRotating object
-            The solver object used to track the bunch.
+        sc_calculator : EnvSolverKV or EnvSolverDanilov object
+            The solver used to track the bunch.
         """
         SC_Base_AccNode.__init__(self, sc_calculator, name)
         self.setType('envsolver')

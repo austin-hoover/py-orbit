@@ -1,11 +1,11 @@
-#include "EnvSolverRotating.hh"
+#include "EnvSolverDanilov.hh"
 
-EnvSolverRotating::EnvSolverRotating(double perveance): CppPyWrapper(NULL)
+EnvSolverDanilov::EnvSolverDanilov(double perveance): CppPyWrapper(NULL)
 {
     Q = perveance;
 }
     
-void EnvSolverRotating::trackBunch(Bunch* bunch, double length)
+void EnvSolverDanilov::trackBunch(Bunch* bunch, double length)
 {
     double a, b, e, f;
     double phi, cosP, sinP, cosP2, sinP2;

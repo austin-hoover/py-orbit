@@ -1,6 +1,6 @@
 """Benchmark of rotating envelope solver.
 
-This script tracks the 2D rotating distribution through a FODO cell using the 
+This script tracks the {2,2} Danilov distribution through a FODO cell using the
 2.5D space charge model and compares the results with the envelope model.
 """
 
@@ -10,16 +10,15 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 from bunch import Bunch
-from spacecharge import SpaceChargeCalc2p5D, EnvSolverRotating
+from spacecharge import SpaceChargeCalc2p5D, EnvSolverDanilov
+from orbit.bunch_generators import DanilovDist2D
 from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.space_charge.sc2p5d import setSC2p5DAccNodes
 from orbit.space_charge.envelope import setEnvAccNodes
+from orbit.utils import helper_funcs as hf
 
-from utils import (
-    create_lattice, lattice_twiss, split_nodes,
-    initialize_bunch, get_perveance, cov_mat, env_cov_mat,
-    RotDist2D
-)
+from utils import cov_mat, env_cov_mat
+
 
 # Settings
 #------------------------------------------------------------------------------
@@ -49,19 +48,19 @@ gridpts_z = 1  # number of longitudinal slices
 #------------------------------------------------------------------------------
 
 # Create FODO lattice
-lattice = create_lattice(lattice_file, seq)
+lattice = hf.lattice_from_file(lattice_file, seq)
 lattice_length = lattice.getLength()
-alpha_x, beta_x, alpha_y, beta_y = lattice_twiss(lattice, mass, energy)
+alpha_x, alpha_y, beta_x, beta_y = hf.twiss_at_injection(lattice, mass, energy)
 
 # Add space charge solver nodes
-split_nodes(lattice, max_solver_spacing)
-Q = get_perveance(energy, mass, intensity/lattice_length)
-setEnvAccNodes(lattice, sc_path_length_min, EnvSolverRotating(Q))
+hf.split_nodes(lattice, max_solver_spacing)
+Q = hf.get_perveance(energy, mass, intensity/lattice_length)
+setEnvAccNodes(lattice, sc_path_length_min, EnvSolverDanilov(Q))
 
 # Create bunch
-dist = RotDist2D((alpha_x, beta_x, eps_x), (alpha_y, beta_y, eps_y))
+dist = DanilovDist2D((alpha_x, beta_x, eps_x), (alpha_y, beta_y, eps_y))
 a, b, ap, bp, e, f, ep, fp = dist.params
-env, params_dict_env = initialize_bunch(mass, energy)
+env, params_dict_env = hf.initialize_bunch(mass, energy)
 env.addParticle(a, ap, e, ep, 0.0, 0.0)
 env.addParticle(b, bp, f, fp, 0.0, 0.0)
 
@@ -77,15 +76,15 @@ for i in range(nturns + 1):
 #------------------------------------------------------------------------------
 
 # Create FODO lattice
-lattice = create_lattice(lattice_file, seq)
+lattice = hf.lattice_from_file(lattice_file, seq)
 
 # Add space charge solver nodes
-split_nodes(lattice, max_solver_spacing)
+hf.split_nodes(lattice, max_solver_spacing)
 setSC2p5DAccNodes(lattice, sc_path_length_min, 
                   SpaceChargeCalc2p5D(gridpts_x, gridpts_y, gridpts_z))
 
 # Create bunch 
-bunch, params_dict = initialize_bunch(mass, energy)
+bunch, params_dict = hf.initialize_bunch(mass, energy)
 bunch.macroSize(intensity/nparts if intensity > 0 else 1)
 for _ in range(nparts):
     x, xp, y, yp = dist.get_coords()
@@ -114,16 +113,16 @@ for i in range(nturns + 1):
 # Plotting
 # ------------------------------------------------------------------------------
 
-fig, axes = plt.subplots(1, 3, sharex=True, figsize=(10, 3))
-for i, ax in enumerate(axes):
-    ax.plot(env_dims[:, i], 'k--', lw=0.5)
-    ax.plot(beam_dims[:, i], 'r+', lw=0)
-    ax.set_xlabel('Turn number')
-ax1, ax2, ax3 = axes
-ax1.set_ylabel(r'[${mm}^2$]')
-ax1.set_title(r'$\langle{x^2}\rangle$')
-ax2.set_title(r'$\langle{y^2}\rangle$')
-ax3.set_title(r'$\langle{xy}\rangle$')
-ax3.legend(labels=['Envelope', 'FFT'], fontsize='small')
-fig.set_tight_layout(True)
-plt.savefig('rot_benchmark.png', dpi=200)
+#fig, axes = plt.subplots(1, 3, sharex=True, figsize=(10, 3))
+#for i, ax in enumerate(axes):
+#    ax.plot(env_dims[:, i], 'k--', lw=0.5)
+#    ax.plot(beam_dims[:, i], 'r+', lw=0)
+#    ax.set_xlabel('Turn number')
+#ax1, ax2, ax3 = axes
+#ax1.set_ylabel(r'[${mm}^2$]')
+#ax1.set_title(r'$\langle{x^2}\rangle$')
+#ax2.set_title(r'$\langle{y^2}\rangle$')
+#ax3.set_title(r'$\langle{xy}\rangle$')
+#ax3.legend(labels=['Envelope', 'FFT'], fontsize='small')
+#fig.set_tight_layout(True)
+#plt.savefig('rot_benchmark.png', dpi=200)

@@ -14,12 +14,15 @@
 ## -  WaterBagDist1D - Class. Generates the Water Bag 1D distribution.
 ## -  WaterBagDist2D - Class. Generates the Water Bag 2D distribution.
 ## -  WaterBagDist3D - Class. Generates the Water Bag 3D distribution.
+## -  DanilovDist2D  - Class. Generates the {2,2} Danilov distribution.
 
-from distribution_generators import TwissContainer, TwissAnalysis
-from distribution_generators import GaussDist1D, GaussDist2D, GaussDist3D
-from distribution_generators import KVDist1D, KVDist2D, KVDist3D
-from distribution_generators import WaterBagDist1D,  WaterBagDist2D,  WaterBagDist3D
-
+from distribution_generators import (
+    TwissContainer, TwissAnalysis,
+    GaussDist1D, GaussDist2D, GaussDist3D,
+    KVDist1D, KVDist2D, KVDist3D,
+    WaterBagDist1D,  WaterBagDist2D,  WaterBagDist3D,
+    DanilovDist2D
+)
 
 __all__ = []
 __all__.append("TwissContainer")
@@ -33,4 +36,5 @@ __all__.append("KVDist3D")
 __all__.append("WaterBagDist1D")
 __all__.append("WaterBagDist2D")
 __all__.append("WaterBagDist3D")
+__all__.append("DanilovDist2D")
 

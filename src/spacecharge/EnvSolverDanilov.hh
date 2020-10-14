@@ -1,4 +1,4 @@
-/** Envelope solver for the 2D rotating distribution.
+/** Envelope solver for the {2,2} Danilov distribution
  
  Reference: 
  V. Danilov, S. Cousineau, S. Henderson, and J. Holmes, Self-consistent time dependent
@@ -6,22 +6,22 @@
  Physical Review Special Topics - Accelerators and Beams 6, 74–85 (2003).
 */
 
-#ifndef ENVSOLVER_ROTATING_H
-#define ENVSOLVER_ROTATING_H
+#ifndef ENVSOLVER_DANILOV_H
+#define ENVSOLVER_DANILOV_H
 
 #include "Bunch.hh"
 #include "CppPyWrapper.hh"
 
 using namespace std;
 
-class EnvSolverRotating: public OrbitUtils::CppPyWrapper
+class EnvSolverDanilov: public OrbitUtils::CppPyWrapper
 {
     public:
     
     double Q; // beam perveance
 
     /** Constructor */
-    EnvSolverRotating(double perveance);
+    EnvSolverDanilov(double perveance);
 
     /** Apply space charge kick.
      
@@ -35,5 +35,5 @@ class EnvSolverRotating: public OrbitUtils::CppPyWrapper
     */
     void trackBunch(Bunch* bunch, double length);
 };
-//end of ENVSOLVER_ROTATING_H
+//end of ENVSOLVER_DANILOV_H
 #endif
