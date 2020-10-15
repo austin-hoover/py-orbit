@@ -6,7 +6,7 @@ from orbit.utils import orbitFinalize
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer, AccNodeBunchTracker
 from orbit.teapot import DriftTEAPOT
 from AnalysisNode import AnalysisNode
-from MonitorNode import OnePartMonitorNode
+from MonitorNode import OnePartMonitorNode, EnvMonitorNode
 
 
 def idx_pos_list(nodes, min_sep=1e-5):
@@ -41,10 +41,10 @@ def add_analysis_nodes_at_centers(lattice, output_dir):
     lattice.initialize()
     
     
-def add_onepart_monitor_nodes_at_centers(lattice, filename):
+def add_monitor_nodes_at_centers(lattice, filename, constructor):
     for node in lattice.getNodes():
         position = lattice.getNodePositionsDict()[node][0]
-        monitor_node = OnePartMonitorNode(filename, position)
+        monitor_node = constructor(filename, position)
         node.addChildNode(monitor_node, node.ENTRANCE)
     lattice.initialize()
     
@@ -82,7 +82,7 @@ def add_analysis_nodes(lattice, output_dir, max_sep=1.0, min_sep=0.00001):
     return analysis_nodes
     
     
-def add_onepart_monitor_nodes(lattice, filename, max_sep=1.0, min_sep=0.00001):
+def add_monitor_nodes(lattice, filename, constructor, max_sep=1.0, min_sep=0.00001):
     """Add one particle monitor nodes at start of each node in lattice.
     
     Parameters
@@ -91,6 +91,9 @@ def add_onepart_monitor_nodes(lattice, filename, max_sep=1.0, min_sep=0.00001):
         The lattice to insert the nodes into.
     filename : str
         The file to store the particle coordinates.
+    constructor : AccNode object
+        The constructor for the monitor node which is called as
+        monitor_node = Constructor(filename, position, name).
     max_sep : float
         The maximum separation between the monitor nodes.
     min_sep : float
@@ -109,7 +112,7 @@ def add_onepart_monitor_nodes(lattice, filename, max_sep=1.0, min_sep=0.00001):
     monitor_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
         name = ''.join(['monitor:', str(idx), ':'])
-        monitor_node = OnePartMonitorNode(filename, position, name)
+        monitor_node = constructor(filename, position, name)
         node.addChildNode(monitor_node, AccNode.BODY, idx, AccNode.BEFORE)
         monitor_nodes.append(monitor_node)
     return monitor_nodes
