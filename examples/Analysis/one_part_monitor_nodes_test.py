@@ -15,19 +15,17 @@ os.system('rm ./_output/*')
 
 # Settings
 filename = '_output/one_part_coords.dat'
-max_monitor_node_sep = 0.01
 mass = 0.93827231 # [GeV/c^2]
 energy = 1.0 # [GeV]
 ex = 15e-6 # rms emittance [m*rad]
 ey = 35e-6
+max_monitor_node_sep = 0.01
 
 # Create lattice
 lattice = hf.lattice_from_file('fodo.lat', 'fodo')
-hf.split_nodes(lattice, 0.01)
+hf.split_nodes(lattice, max_monitor_node_sep)
 ax, ay, bx, by = hf.twiss_at_injection(lattice, mass, energy)
-monitor_nodes  = add_monitor_nodes(
-    lattice, filename, OnePartMonitorNode, max_monitor_node_sep
-)
+monitor_nodes  = add_monitor_nodes(lattice, filename, OnePartMonitorNode)
 
 # Create one particle bunch
 x = sqrt(ex * bx)

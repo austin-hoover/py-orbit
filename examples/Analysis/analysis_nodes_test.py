@@ -24,8 +24,8 @@ ey = 35e-6
 
 # Create lattice
 lattice = hf.lattice_from_file('fodo.lat', 'fodo')
-hf.split_nodes(lattice, 0.01)
 ax, ay, bx, by = hf.twiss_at_injection(lattice, mass, energy)
+hf.split_nodes(lattice, 0.01)
 analysis_nodes  = add_analysis_nodes(
     lattice, output_dir, max_analysis_node_sep
 )

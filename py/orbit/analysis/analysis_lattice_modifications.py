@@ -49,7 +49,7 @@ def add_monitor_nodes_at_centers(lattice, filename, constructor):
     lattice.initialize()
     
         
-def add_analysis_nodes(lattice, output_dir, max_sep=1.0, min_sep=0.00001):
+def add_analysis_nodes(lattice, output_dir, min_sep=0.00001):
     """Add analysis nodes at start of each node in the lattice.
     
     Parameters
@@ -58,8 +58,6 @@ def add_analysis_nodes(lattice, output_dir, max_sep=1.0, min_sep=0.00001):
         The lattice to insert the nodes into.
     output_dir : str
         The directory to store the output files.
-    max_sep : float
-        The maximum separation between the analysis nodes.
     min_sep : float
         The minimum separation between the analysis nodes.
         
@@ -72,7 +70,6 @@ def add_analysis_nodes(lattice, output_dir, max_sep=1.0, min_sep=0.00001):
     if len(nodes) == 0:
         return
         
-    split_nodes(lattice, max_sep)
     analysis_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
         name = ''.join([node.getName(), ':', str(idx), ':'])
@@ -82,7 +79,7 @@ def add_analysis_nodes(lattice, output_dir, max_sep=1.0, min_sep=0.00001):
     return analysis_nodes
     
     
-def add_monitor_nodes(lattice, filename, constructor, max_sep=1.0, min_sep=0.00001):
+def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
     """Add one particle monitor nodes at start of each node in lattice.
     
     Parameters
@@ -94,8 +91,6 @@ def add_monitor_nodes(lattice, filename, constructor, max_sep=1.0, min_sep=0.000
     constructor : AccNode object
         The constructor for the monitor node which is called as
         monitor_node = Constructor(filename, position, name).
-    max_sep : float
-        The maximum separation between the monitor nodes.
     min_sep : float
         The minimum separation between the monitor nodes.
         
@@ -107,8 +102,7 @@ def add_monitor_nodes(lattice, filename, constructor, max_sep=1.0, min_sep=0.000
     nodes = lattice.getNodes()
     if len(nodes) == 0:
         return
-        
-    split_nodes(lattice, max_sep)
+
     monitor_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
         name = ''.join(['monitor:', str(idx), ':'])

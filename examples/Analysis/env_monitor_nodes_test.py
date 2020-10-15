@@ -24,11 +24,9 @@ ey = 35e-6
 
 # Create lattice
 lattice = hf.lattice_from_file('fodo.lat', 'fodo')
-hf.split_nodes(lattice, 0.01)
+hf.split_nodes(lattice, max_monitor_node_sep)
 ax, ay, bx, by = hf.twiss_at_injection(lattice, mass, energy)
-monitor_nodes  = add_monitor_nodes(
-    lattice, filename, EnvMonitorNode, max_monitor_node_sep
-)
+add_monitor_nodes(lattice, filename, EnvMonitorNode)
 
 # Create envelope
 dist = DanilovDist2D((ax, bx, ex), (ay, by, ey))
