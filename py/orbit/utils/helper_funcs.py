@@ -24,13 +24,13 @@ def get_perveance(energy, mass, density):
     return (2 * r0 * density) / (beta**2 * gamma**3)
 
 
-def sigma_mat_to_vec(S):
+def mat2vec(S):
     """Return vector of independent elements in 4x4 symmetric matrix S."""   
     return np.array([S[0,0], S[0,1], S[0,2], S[0,3], S[1,1], 
                      S[1,2], S[1,3], S[2,2], S[2,3], S[3,3]])
 
 
-def sigma_vec_to_mat(v):
+def vec2mat(v):
     """Return symmetric matrix from vector."""
     S11, S12, S13, S14, S22, S23, S24, S33, S34, S44 = v
     return np.array([[S11, S12, S13, S14],
