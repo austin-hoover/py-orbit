@@ -210,8 +210,8 @@ class KVDist3D:
             if(pxy2 > 0.):
                 break
             if(n_count > n_limit):
-                print "KVDist3D generator has a problem with Python random module!"
-                print "Stop."
+#                print "KVDist3D generator has a problem with Python random module!"
+#                print "Stop."
                 sys.exit(1)
         #make xp-yp plane
         pxy = math.sqrt(pxy2)
@@ -355,9 +355,10 @@ class DanilovDist2D:
     Accelerators and Beams 6, 74–85 (2003).
     """
     
-    def __init__(self, twiss_x, twiss_y, nu=np.pi/2, rot_dir='ccw'):
-
-        (ax, bx, ex), (ay, by, ey)= twiss_x, twiss_y
+    def __init__(self, twissX, twissY, nu=np.pi/2, rot_dir='ccw'):
+    
+        ax, bx, ex = twissX.getAlphaBetaEmitt()
+        ay, by, ey = twissY.getAlphaBetaEmitt()
         R = phase_space_rotation_matrix(nu - np.pi/2, 0.0)
         A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
         V = norm_mat_4D(ax, bx, ay, by)
@@ -368,7 +369,7 @@ class DanilovDist2D:
             P = np.array([[1, 0], [0, 1], [0, +1], [-1, 0]])
         self.params = np.linalg.multi_dot([V, A, R, P]).flatten()
         
-    def get_coords(self):
+    def getCoordinates(self):
         """Return the transverse phase space coordinates."""
         rho = np.sqrt(np.random.random())
         psi = 2 * np.pi * np.random.random()
@@ -486,7 +487,7 @@ class TwissAnalysis:
         [alpha,beta,gamma, emittance] for the dimension d.
         """
         if(d <  0 or d >= self.nD):
-            print "Dimention n="+str(d)+" does not exist!"
+#            print "Dimention n="+str(d)+" does not exist!"
             sys.exit(1)
         if(self.Np == 0): return (0.,0.,0.)
         x_avg =  self.x_avg_v[d]
@@ -512,7 +513,7 @@ class TwissAnalysis:
         [u,up] for the dimension d.
         """
         if(d <  0 or d >= self.nD):
-            print "Dimention n="+str(d)+" does not exist!"
+#            print "Dimention n="+str(d)+" does not exist!"
             sys.exit(1)
         if(self.Np == 0): return (0.,0.)
         x_avg =  self.x_avg_v[d]/self.Np
@@ -525,7 +526,7 @@ class TwissAnalysis:
         [u,up] for the dimension d.
         """
         if(d <  0 or d >= self.nD):
-            print "Dimention n="+str(d)+" does not exist!"
+#            print "Dimention n="+str(d)+" does not exist!"
             sys.exit(1)
         if(self.Np == 0 or self.Np == 1): return (0.,0.)
         x2_rms =  math.sqrt(math.fabs((self.x2_avg_v[d] -  (self.x_avg_v[d])**2/self.Np)/(self.Np-1)))
@@ -538,7 +539,7 @@ class TwissAnalysis:
         [u,up] for the dimension d.
         """
         if(d <  0 or d >= self.nD):
-            print "Dimention n="+str(d)+" does not exist!"
+#            print "Dimention n="+str(d)+" does not exist!"
             sys.exit(1)
         if(self.Np == 0): return (0.,0.)
         return (self.x_max_v[d],self.xp_max_v[d])
@@ -549,7 +550,7 @@ class TwissAnalysis:
         [u,up] for the dimension d.
         """
         if(d <  0 or d >= self.nD):
-            print "Dimention n="+str(d)+" does not exist!"
+#            print "Dimention n="+str(d)+" does not exist!"
             sys.exit(1)
         if(self.Np == 0): return (0.,0.)
         return (self.x_min_v[d],self.xp_min_v[d])
