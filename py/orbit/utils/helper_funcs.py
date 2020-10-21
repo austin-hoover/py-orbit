@@ -52,13 +52,6 @@ def lattice_from_file(file, seq, fringe=False):
     lattice.readMADX(file, seq)
     set_fringe(lattice, fringe)
     return lattice
-
-
-def split_nodes(lattice, max_length):
-    for node in lattice.getNodes():
-        node_length = node.getLength()
-        if node_length > max_length:
-            node.setnParts(int(node_length / max_length))
     
     
 def add_node_at_start(lattice, node):
@@ -119,6 +112,15 @@ def initialize_envelope(env_params, mass, energy):
     bunch.addParticle(a, ap, e, ep, 0, 0) 
     bunch.addParticle(b, bp, f, fp, 0, 0)
     return bunch, params_dict
+    
+    
+def fill_bunch(bunch, distribution, nparts):
+    """Fill bunch with particles (uniform z distribution)."""
+    for i in range(nparts):
+        x, xp, y, yp = dist.getCoordinates()
+        z = lattice_length * np.random.random()
+        bunch.addParticle(x, xp, y, yp, z, 0.0)
+    return bunch
         
     
 def coasting_beaam(
@@ -148,10 +150,7 @@ def coasting_beaam(
         TwissContainer(ay, by, ey)
     )
     # Add particles to bunch
-    for i in range(int(nparts)):
-        x, xp, y, yp = dist.getCoordinates()
-        z = lattice_length * np.random.random()
-        bunch.addParticle(x, xp, y, yp, z, 0.0)
+    bunch = fill_bunch(bunch, dist, nparts)
     return bunch, params_dict
                                                                     
     
@@ -185,7 +184,7 @@ def track_bunch(bunch, params_dict, lattice, nturns, output_dir, dump_every=0):
     return np.array(coords)
             
     
-def get_env_params(bunch):
+def env_from_bunch(bunch):
     """Extract envelope parameters from bunch."""
     a, ap, e, ep = bunch.x(0), bunch.xp(0), bunch.y(0), bunch.yp(0)
     b, bp, f, fp = bunch.x(1), bunch.xp(1), bunch.y(1), bunch.yp(1)
@@ -196,7 +195,7 @@ def track_env(bunch, params_dict, lattice, nturns, output_file=None):
     """Track envelope through lattice."""
     env_params = np.zeros((nturns + 1, 8))
     for i in trange(nturns + 1):
-        env_params[i] = get_env_params(bunch)
+        env_params[i] = env_from_bunch(bunch)
         lattice.trackBunch(bunch, params_dict)
     env_params *= 1000 # mm*mrad
     if output_file is not None:
