@@ -99,7 +99,6 @@ def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
         name = ''.join(['monitor_', str(idx)])
         tilt = node.getAllChildren()[0].getTiltAngle()
-        print 'tilt =', tilt
         monitor_node = constructor(filename, position, name, tilt)
         node.addChildNode(monitor_node, AccNode.BODY, idx, AccNode.BEFORE)
         monitor_nodes.append(monitor_node)
