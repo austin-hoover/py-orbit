@@ -241,6 +241,7 @@ class AccLattice(NamedObject, TypedObject):
         return self._getSubLattice( AccLattice(),index_start,index_stop)
     
     def split(self, max_node_length):
+        """Split nodes into parts so no part is longer than max_node_length."""
         for node in self.__children:
             node_length = node.getLength()
             if node_length > max_node_length:
