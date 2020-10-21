@@ -23,14 +23,6 @@ def idx_pos_list(nodes, min_sep=1e-5):
             position += part_length
     nodes_arr.insert(0, (nodes[0], 0, 0.))
     return nodes_arr
-    
-    
-def split_nodes(lattice, max_sep):
-    """If a node is too long, split it into parts."""
-    for node in lattice.getNodes():
-        node_length = node.getLength()
-        if node_length > max_sep:
-            node.setnParts(int(node_length / max_sep))
 
 
 def add_analysis_nodes_at_centers(lattice, output_dir):
@@ -105,8 +97,10 @@ def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
 
     monitor_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
-        name = ''.join(['monitor:', str(idx), ':'])
-        monitor_node = constructor(filename, position, name)
+        name = ''.join(['monitor_', str(idx)])
+        tilt = node.getAllChildren()[0].getTiltAngle()
+        print 'tilt =', tilt
+        monitor_node = constructor(filename, position, name, tilt)
         node.addChildNode(monitor_node, AccNode.BODY, idx, AccNode.BEFORE)
         monitor_nodes.append(monitor_node)
     return monitor_nodes
