@@ -27,6 +27,6 @@ def setEnvAccNodes(lattice, path_length_min, sc_calculator):
     """
     sc_nodes = setSC_General_AccNodes(lattice, path_length_min, sc_calculator, EnvSolverNode)
     for sc_node in sc_nodes:
-        sc_node.setName(sc_node.getName() + 'envsolver')
+        sc_node.setName(''.join([sc_node.getName(), 'envsolver']))
     lattice.initialize()
     return sc_nodes
