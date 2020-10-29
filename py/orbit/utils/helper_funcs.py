@@ -3,6 +3,7 @@ This module contains functions for use in PyORBIT scripts.
 """
 
 import numpy as np
+import numpy.linalg as la
 from tqdm import trange
 
 # PyORBIT modules
@@ -78,6 +79,14 @@ def transfer_matrix(lattice, mass, energy):
         for j in range(4):
             M[i, j] = transfer_mat.get(i, j)
     return M
+    
+    
+def is_stable(M):
+    """Determine stability of transfer matrix M."""
+    for eigval in la.eigvals(M):
+        if abs(la.norm(eigval) - 1) > 1e-3:
+            return False
+    return True
     
     
 def twiss_at_injection(lattice, mass, energy):
