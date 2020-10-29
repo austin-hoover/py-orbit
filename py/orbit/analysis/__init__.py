@@ -1,4 +1,4 @@
-from analysis import Stats
+from analysis import Stats, covmat2vec
 from AnalysisNode import AnalysisNode
 from MonitorNode import EnvMonitorNode, OnePartMonitorNode
 from analysis_lattice_modifications import (
@@ -10,6 +10,7 @@ from analysis_lattice_modifications import (
 from MonitorNode import EnvMonitorNode, OnePartMonitorNode
 __all__ = []
 __all__.append("Stats")
+__all__.append("covmat2vec")
 __all__.append("AnalysisNode")
 __all__.append("EnvMonitorNode")
 __all__.append("OnePartMonitorNode")

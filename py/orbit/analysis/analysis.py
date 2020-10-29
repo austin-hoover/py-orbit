@@ -2,6 +2,12 @@ import numpy as np
 from numpy import linalg as la
 
 
+def covmat2vec(S):
+    return np.array([S[0,0], S[0,1], S[0,2], S[0,3],
+                     S[1,1], S[1,2], S[1,3],
+                     S[2,2], S[2,3],
+                     S[3,3]])
+
 def coords(bunch, mm_mrad=True):
     """Return the transverse coordinate array from the bunch."""
     nparts = bunch.getSize()
@@ -24,14 +30,14 @@ class Stats:
     def write(self, s, bunch, mm_mrad=True):
         """Add the current moments as a new line in the file."""
         X = coords(bunch, mm_mrad)
-        S = np.cov(X.T)
+        moments = covmat2vec(np.cov(X.T))
         f = '{}' + 10*' {}' + '\n'
         self.file.write(f.format(
             s,
-            S[0,0], S[0,1], S[0,2], S[0,3],
-            S[1,1], S[1,2], S[1,3],
-            S[2,2], S[2,3],
-            S[3,3])
+            moments[0], moments[1], moments[1], moments[3],
+            moments[4], moments[5], moments[6],
+            moments[7], moments[8],
+            moments[9])
         )
         
     def close(self):
