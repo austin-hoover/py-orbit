@@ -38,7 +38,7 @@ def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
 class Envelope:
 
     def __init__(self, params=None, mass=1., energy=1.):
-        if not params:
+        if params is None:
             self.params = np.array([1, 0, 0, 1, 0, -1, 1, 0])
         else:
             self.params = params
@@ -103,9 +103,21 @@ class Envelope:
         P = self.matrix()
         ax, ay, bx, by, _, _ = self.twiss()
         V = norm_mat(ax, bx, ay, by)
-        a, b, ap, bp, e, f, ep, fp = np.matmul(la.inv(V), P).flatten()
-        mux, muy = np.arctan2(ap, a), np.arctan2(ep, e)
-        return muy - mux
+        Vinv = la.inv(V)
+        a, b, ap, bp, e, f, ep, fp = self.to_vec(np.matmul(Vinv, P))
+        # Positive phase is clockwise
+        mux = -np.arctan2(ap, a)
+        muy = -np.arctan2(ep, e)
+        # Put in range [0, 2pi]
+        if mux < 0:
+            mux += 2*np.pi
+        if muy < 0:
+            muy += 2*np.pi
+        # Get the minimum angle between them
+        nu = abs(muy - mux)
+        if nu > np.pi:
+            nu = 2*np.pi - nu
+        return nu
         
     def fit_to_cov_mat(self, S, verbose=0):
         """Return the parameters which generate the covariance matrix S."""
@@ -125,15 +137,10 @@ class Envelope:
         return self.params
         
     def from_twiss(self, ax, ay, bx, by, ex, ey, nu, mode):
-        mux = np.pi/2 - nu
+        mu = np.pi/2 - nu
         if mode == 2:
-            mux *= -1
-        R = phase_adv_matrix(mux, 0.)
-        # Check if emittance is negative (will happen if very close to 0)
-        if ex <= 0:
-            ex = 1e-12
-        if ey <= 0:
-            ey = 1e-12
+            mu *= -1
+        R = phase_adv_matrix(0., mu)
         A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
         V = norm_mat(ax, bx, ay, by)
         # Get envelope parameters
@@ -168,9 +175,10 @@ class Envelope:
             
         # Set up parameter vector and bounds
         ax, ay, bx, by, ex, ey = self.twiss()
-        nu = abs(self.phase_diff())
+        nu = self.phase_diff()
         e_mode = ex + ey
         param_vec = np.array([ax, ay, bx, by, ex/e_mode, nu])
+#        print '    ', param_vec
         pad = 1e-5
         bounds = (
             (-np.inf, -np.inf, pad, pad, pad, pad),
