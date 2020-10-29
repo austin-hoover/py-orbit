@@ -242,10 +242,21 @@ class AccLattice(NamedObject, TypedObject):
     
     def split(self, max_node_length):
         """Split nodes into parts so no part is longer than max_node_length."""
-        for node in self.__children:
+        for node in self.getNodes():
             node_length = node.getLength()
             if node_length > max_node_length:
                 node.setnParts(int(node_length / max_node_length))
+                
+    def has_tilted_elements(self):
+        for node in self.getNodes():
+            if node.getTiltAngle() != 0:
+                return True
+        return False
+        
+    def set_fringe(self, switch):
+        for node in self.getNodes():
+            node.setUsageFringeFieldIN(switch)
+            node.setUsageFringeFieldOUT(switch)
 
     def trackActions(self, actionsContainer, paramsDict = {}, index_start = -1, index_stop = -1):
         """
