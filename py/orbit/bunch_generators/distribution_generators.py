@@ -355,7 +355,7 @@ class DanilovDist2D:
     Accelerators and Beams 6, 74–85 (2003).
     """
     
-    def __init__(self, twissX, twissY, nu=np.pi/2, rot_dir='ccw'):
+    def __init__(self, twissX=TwissContainer(0.,1.,1.), twissY=TwissContainer(0.,1.,1.), nu=np.pi/2, rot_dir='ccw'):
     
         ax, bx, ex = twissX.getAlphaBetaEmitt()
         ay, by, ey = twissY.getAlphaBetaEmitt()
