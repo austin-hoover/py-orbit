@@ -155,15 +155,6 @@ def initialize_bunch(mass, energy):
     bunch.getSyncParticle().kinEnergy(energy)
     params_dict = {'bunch': bunch}
     return bunch, params_dict
-    
-    
-def fill_bunch(bunch, distribution, nparts):
-    """Fill bunch with particles (uniform z distribution)."""
-    for i in range(nparts):
-        x, xp, y, yp = dist.getCoordinates()
-        z = lattice_length * np.random.random()
-        bunch.addParticle(x, xp, y, yp, z, 0.0)
-    return bunch
         
     
 def coasting_beaam(
@@ -189,7 +180,10 @@ def coasting_beaam(
         TwissContainer(ax, bx, ex), 
         TwissContainer(ay, by, ey)
     )
-    bunch = fill_bunch(bunch, dist, nparts)
+    for i in range(nparts):
+        x, xp, y, yp = dist.getCoordinates()
+        z = lattice_length * np.random.random()
+        bunch.addParticle(x, xp, y, yp, z, 0.0)
     return bunch, params_dict
                                                                     
     
@@ -203,6 +197,13 @@ def get_coords(bunch, mm_mrad=False):
     if mm_mrad:
         X *= 1000.
     return X
+    
+    
+def dist_to_bunch(X, bunch, bunch_length):
+    for (x, xp, y, yp) in X:
+        z = bunch_length * np.random.random()
+        bunch.addParticle(x, xp, y, yp, z, 0.)
+    return bunch
     
     
 def track_bunch(bunch, params_dict, lattice, nturns, output_dir, dump_every=0):

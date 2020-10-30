@@ -72,8 +72,8 @@ def add_analysis_nodes(lattice, output_dir, min_sep=0.00001):
     return analysis_nodes
     
     
-def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
-    """Add one particle monitor nodes at start of each node in lattice.
+def add_env_monitor_nodes(lattice, path_env, path_testbunch, min_sep=0.00001):
+    """Add envelope monitor nodes at start of each node in lattice.
     
     Parameters
     ----------
@@ -84,6 +84,8 @@ def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
     constructor : AccNode object
         The constructor for the monitor node which is called as
         monitor_node = Constructor(filename, position, name).
+    tbt : bool
+        If True, the parameters are tracked turn-by-
     min_sep : float
         The minimum separation between the monitor nodes.
         
@@ -98,8 +100,8 @@ def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
 
     monitor_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
-        name = ''.join(['monitor_', str(idx)])
-        monitor_node = constructor(filename, position, name)
+        name = ''.join(['env_monitor_', str(idx)])
+        monitor_node = EnvMonitorNode(path_env, path_testbunch, position, name)
         monitor_node.setTiltAngle(-node.getAllChildren()[0].getTiltAngle())
         node.addChildNode(monitor_node, AccNode.BODY, idx, AccNode.BEFORE)
         monitor_nodes.append(monitor_node)

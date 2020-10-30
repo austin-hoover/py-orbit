@@ -108,12 +108,12 @@ class Envelope:
         # Positive phase is clockwise
         mux = -np.arctan2(ap, a)
         muy = -np.arctan2(ep, e)
-        # Put in range [0, 2pi]
+        # Put phases in in range [0, 2pi]
         if mux < 0:
             mux += 2*np.pi
         if muy < 0:
             muy += 2*np.pi
-        # Get the minimum angle between them
+        # Absolute difference modulo pi
         nu = abs(muy - mux)
         if nu > np.pi:
             nu = 2*np.pi - nu
@@ -158,6 +158,21 @@ class Envelope:
         bunch.addParticle(b, bp, f, fp, 0, 0)
         return bunch, params_dict
         
+    def get_part_coords(self, psi=0):
+        a, b, ap, bp, e, f, ep, fp = self.params
+        cos, sin = np.cos(psi), np.sin(psi)
+        x = a*cos + b*sin
+        y = e*cos + f*sin
+        xp = ap*cos + bp*sin
+        yp = ep*cos + fp*sin
+        return np.array([x, xp, y, yp])
+        
+    def generate_dist(self, nparts):
+        psis = np.linspace(0, 2*np.pi, nparts)
+        X = np.array([self.get_part_coords(psi) for psi in psis])
+        radii = np.sqrt(np.random.random(size=(nparts, 1)))
+        return X * np.sqrt(np.random.random((nparts, 1)))
+        
     def match(self, lattice, mode=1, nturns=1, verbose=0):
     
         def cost(param_vec, lattice, mode, e_mode, nturns=1):
@@ -171,14 +186,13 @@ class Envelope:
             for _ in range(nturns):
                 lattice.trackBunch(bunch, params_dict)
             self.from_bunch(bunch)
-            return 1e6 * covmat2vec(self.cov() - initial_cov_mat)
+            return 1e12 * covmat2vec(self.cov() - initial_cov_mat)
             
         # Set up parameter vector and bounds
         ax, ay, bx, by, ex, ey = self.twiss()
         nu = self.phase_diff()
         e_mode = ex + ey
         param_vec = np.array([ax, ay, bx, by, ex/e_mode, nu])
-#        print '    ', param_vec
         pad = 1e-5
         bounds = (
             (-np.inf, -np.inf, pad, pad, pad, pad),
@@ -199,19 +213,40 @@ class Envelope:
         ex, ey = r * e_mode, (1 - r) * e_mode
         self.from_twiss(ax, ay, bx, by, ex, ey, nu, mode)
         return result
-
-    def track(self, lattice, nturns=1, output_file=None, mm_mrad=True):
+        
+        
+    def get_transfer_matrix(self, lattice):
+        """Compute the linear transfer matrix with the inclusion of space charge.
+        
+        For this to have meaning, the envelope parameters should already be
+        matched to the lattice.
+        """
         bunch, params_dict = self.to_bunch()
-        tracked_params = np.zeros((nturns + 1, 8))
-        tracked_params[0] = self.params
-        for i in trange(nturns):
-            lattice.trackBunch(bunch, params_dict)
-            tracked_params[i + 1] = self.from_bunch(bunch)
-        self.params = tracked_params[-1]
-        if mm_mrad:
-            tracked_params *= 1000 # mm*mrad
-        s = np.zeros((nturns + 1, 1))
-        tracked_params = np.hstack([s, tracked_params])
-        if output_file is not None:
-            np.savetxt(output_file, tracked_params, fmt='%1.15f')
-        return tracked_params
+        
+        step_arr_init = np.full(6, 1e-6)
+        step_arr = np.copy(step_arr_init)
+        step_reduce = 20.
+        bunch.addParticle(0., 0., 0., 0., 0., 0.);
+        bunch.addParticle(step_arr[0]/step_reduce, 0., 0., 0., 0., 0.)
+        bunch.addParticle(0., step_arr[1]/step_reduce, 0., 0., 0., 0.)
+        bunch.addParticle(0., 0., step_arr[2]/step_reduce, 0., 0., 0.)
+        bunch.addParticle(0., 0., 0., step_arr[3]/step_reduce, 0., 0.)
+        bunch.addParticle(step_arr[0], 0., 0., 0., 0., 0.)
+        bunch.addParticle(0., step_arr[1], 0., 0., 0., 0.)
+        bunch.addParticle(0., 0., step_arr[2], 0., 0., 0.)
+        bunch.addParticle(0., 0., 0., step_arr[3], 0., 0.)
+        
+        lattice.trackBunch(bunch, params_dict)
+        X = np.array([[bunch.x(i), bunch.xp(i), bunch.y(i), bunch.yp(i)]
+                      for i in range(2, bunch.getSize())])
+                      
+        M = np.zeros((4, 4))
+        for i in range(4):
+            for j in range(4):
+                x1 = step_arr[i] / step_reduce
+                x2 = step_arr[i]
+                y0 = X[0, j]
+                y1 = X[i + 1, j]
+                y2 = X[i + 1 + 4, j]
+                M[j, i] = ((y1-y0)*x2*x2 - (y2-y0)*x1*x1) / (x1*x2*(x2-x1))
+        return M

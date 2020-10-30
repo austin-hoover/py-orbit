@@ -5,7 +5,7 @@ from analysis_lattice_modifications import (
     add_analysis_nodes_at_centers,
     add_analysis_nodes,
     add_monitor_nodes_at_centers,
-    add_monitor_nodes
+    add_env_monitor_nodes
 )
 from MonitorNode import EnvMonitorNode, OnePartMonitorNode
 __all__ = []
@@ -17,4 +17,4 @@ __all__.append("OnePartMonitorNode")
 __all__.append("add_analysis_nodes_at_centers")
 __all__.append("add_analysis_nodes")
 __all__.append("add_monitor_nodes_at_centers")
-__all__.append("add_monitor_nodes")
+__all__.append("add_env_monitor_nodes")
