@@ -37,6 +37,7 @@ def add_monitor_nodes_at_centers(lattice, filename, constructor):
     for node in lattice.getNodes():
         position = lattice.getNodePositionsDict()[node][0]
         monitor_node = constructor(filename, position)
+        monitor_node.setTiltAngle(-node.getAllChildren()[0].getTiltAngle())
         node.addChildNode(monitor_node, node.ENTRANCE)
     lattice.initialize()
     
@@ -98,8 +99,8 @@ def add_monitor_nodes(lattice, filename, constructor, min_sep=0.00001):
     monitor_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
         name = ''.join(['monitor_', str(idx)])
-        tilt = node.getAllChildren()[0].getTiltAngle()
-        monitor_node = constructor(filename, position, name, tilt)
+        monitor_node = constructor(filename, position, name)
+        monitor_node.setTiltAngle(-node.getAllChildren()[0].getTiltAngle())
         node.addChildNode(monitor_node, AccNode.BODY, idx, AccNode.BEFORE)
         monitor_nodes.append(monitor_node)
     return monitor_nodes
