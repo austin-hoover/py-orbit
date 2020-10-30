@@ -21,12 +21,14 @@ def phase_adv_matrix(mu1, mu2):
     
 def normalize(eigvecs):
     """Normalize of transfer matrix eigenvectors."""
-    v = eigvecs[:, 0]
-    val = la.multi_dot([np.conj(v), U, v]).imag
-    if val > 0:
-        eigvecs[:, 0], eigvecs[:, 1] = eigvecs[:, 1], eigvecs[:, 0]
-        eigvecs[:, 2], eigvecs[:, 3] = eigvecs[:, 3], eigvecs[:, 2]
-    return eigvecs * np.sqrt(2 / np.abs(val))
+    v1, _, v2, _ = eigvecs.T
+    for i in (0, 2):
+        v = eigvecs[:, i]
+        val = la.multi_dot([np.conj(v), U, v]).imag
+        if val > 0:
+            eigvecs[:, i], eigvecs[:, i+1] = eigvecs[:, i+1], eigvecs[:, i]
+        eigvecs[:, i:i+2] *= np.sqrt(2 / np.abs(val))
+    return eigvecs
 
 def construct_V(M):
     """Construct normalization matrix from transfer matrix."""
