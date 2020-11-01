@@ -44,16 +44,13 @@ class OnePartWriter:
         
 class EnvMonitorNode(DriftTEAPOT):
 
-    def __init__(self, path_env, path_testbunch, position, name='env_monitor', tbt=False):
+    def __init__(self, filename_env, path_testbunch, position, name='env_monitor', tbt=False):
         DriftTEAPOT.__init__(self, name)
         self.turn_idx = 0
-        if not path_env.endswith('/'):
-            path_env += '/'
         if not path_testbunch.endswith('/'):
             path_testbunch += '/'
         self.path_testbunch = path_testbunch
-        self.path_env = path_env
-        filename_env = ''.join([path_env, 'env_params.dat'])
+        self.filename_env = filename_env
         if tbt:
             filename_testbunch = ''.join([path_testbunch, 'coords_{}.dat'.format(self.turn_idx)])
         else:

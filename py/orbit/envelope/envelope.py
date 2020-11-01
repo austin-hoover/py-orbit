@@ -34,6 +34,32 @@ def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
     V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
     return V
     
+def SigmaBL(ax, ay, bx, by, u, nu, eps, mode=1):
+    """Bogacz & Lebedev covariance matrix for either eps1 = 0 or eps2 = 0."""
+    cos, sin = np.cos(nu), np.sin(nu)
+    if mode == 1:
+        s11, s33 = bx, by
+        s12, s34 = -ax, -ay
+        s22 = ((1-u)**2 + ax**2) / bx
+        s44 = (u**2 + ay**2) / by
+        s13 = np.sqrt(bx*by) * cos
+        s14 = np.sqrt(bx/by) * (u*sin - ay*cos)
+        s23 = -np.sqrt(by/bx) * ((1-u)*sin + ax*cos)
+        s24 = ((ay*(1-u) - ax*u)*sin + (u*(1-u) + ax*ay)*cos) / np.sqrt(bx*by)
+    elif mode == 2:
+        s11, s33 = bx, by
+        s12, s34 = -ax, -ay
+        s22 = (u**2 + ax**2) / bx
+        s44 = ((1-u)**2 + ay**2) / by
+        s13 = np.sqrt(bx*by) * cos
+        s14 = -np.sqrt(bx/by) * ((1-u)*sin + ay*cos)
+        s23 = np.sqrt(by/bx) * (u*sin - ax*cos)
+        s24 = ((ax*(1-u) - ay*u)*sin + (u*(1-u) + ax*ay)*cos) / np.sqrt(bx*by)
+    return eps * np.array([[s11, s12, s13, s14],
+                           [s12, s22, s23, s24],
+                           [s13, s23, s33, s34],
+                           [s14, s24, s34, s44]])
+        
 
 class Envelope:
 
@@ -65,6 +91,23 @@ class Envelope:
         ax = -S[0, 1] / ex
         ay = -S[2, 3] / ey
         return ax, ay, bx, by, ex, ey
+        
+    def twissBL(self, mode):
+        ax, ay, bx, by, ex, ey = self.twiss()
+        eps = ex + ey
+        if mode == 1:
+            u = ey / eps
+            bx *= (1 - u)
+            ax *= (1 - u)
+            by *= u
+            ay *= u
+        elif mode == 2:
+            u = ex / eps
+            bx *= u
+            ax *= u
+            by *= (1 - u)
+            ay *= (1 - u)
+        return ax, ay, bx, by, u
         
     def tilt_angle(self, xvar='x', yvar='y'):
         """Return tilt angle of ellipse (ccw)."""
@@ -121,12 +164,13 @@ class Envelope:
         
     def fit_to_cov_mat(self, S, verbose=0):
         """Return the parameters which generate the covariance matrix S."""
-        def mismatch(params):
+        def mismatch(params, S):
             self.params = params
             return 1e12 * covmat2vec(S - self.cov())
         result = opt.least_squares(
             mismatch,
             self.params,
+            args=(S,),
             xtol=1e-12, verbose=verbose)
         return result.x
         
@@ -250,3 +294,56 @@ class Envelope:
                 y2 = X[i + 1 + 4, j]
                 M[j, i] = ((y1-y0)*x2*x2 - (y2-y0)*x1*x1) / (x1*x2*(x2-x1))
         return M
+        
+        
+        
+        
+    def matchBL(self, lattice, mode=1, nturns=1, max_attempts=100, tol=1e-8, verbose=0):
+        """Try to use the BL formulation to match."""
+    
+        def cost(param_vec, lattice, mode, eps, nturns=1):
+            ax, ay, bx, by, u, nu = param_vec # BL Twiss
+            Sigma0 = SigmaBL(ax, ay, bx, by, u, nu, eps, mode)
+            self.fit_to_cov_mat(Sigma0)
+            # Track and compute mismatch
+            bunch, params_dict = self.to_bunch()
+            for _ in range(nturns):
+                lattice.trackBunch(bunch, params_dict)
+            self.from_bunch(bunch)
+            return 1e12 * covmat2vec(self.cov() - Sigma0)
+        
+        for i in range(max_attempts):
+        
+            # Set up parameter vector and bounds
+            _, _, _, _, ex, ey = self.twiss()
+            eps = ex + ey
+            ax, ay, bx, by, u = self.twissBL(mode)
+            nu = self.phase_diff()
+            param_vec = np.array([ax, ay, bx, by, u, nu])
+            pad = 1e-5
+            bounds = (
+                (-np.inf, -np.inf, pad, pad, pad, pad),
+                (np.inf, np.inf, np.inf, np.inf, 1-pad, np.pi-pad)
+            )
+        
+            # Run optimizer
+            result = opt.least_squares(
+                cost,
+                param_vec,
+                args=(lattice, mode, eps, nturns),
+                bounds=bounds,
+                verbose=verbose,
+                xtol=1e-12,
+            )
+
+            # Fit parameters to result
+            ax, ay, bx, by, u, nu = result.x
+            matched_Sigma = SigmaBL(ax, ay, bx, by, u, nu, eps, mode)
+            self.fit_to_cov_mat(matched_Sigma)
+        
+            print '    C = {:.2e}, attempts = {}'.format(result.cost, i)
+            if result.cost < tol:
+                print '    SUCCESS'
+                break
+            
+        return result

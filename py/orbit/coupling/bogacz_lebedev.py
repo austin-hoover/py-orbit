@@ -7,17 +7,21 @@ import numpy as np
 import numpy.linalg as la
 from tqdm import trange
 
+
 U = np.array([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]])
+
 
 def rotation_matrix(phi):
     C, S = np.cos(phi), np.sin(phi)
     return np.array([[C, S], [-S, C]])
+    
     
 def phase_adv_matrix(mu1, mu2):
     R = np.zeros((4, 4))
     R[:2, :2] = rotation_matrix(mu1)
     R[2:, 2:] = rotation_matrix(mu2)
     return R
+    
     
 def normalize(eigvecs):
     """Normalize of transfer matrix eigenvectors."""
@@ -29,12 +33,10 @@ def normalize(eigvecs):
             eigvecs[:, i], eigvecs[:, i+1] = eigvecs[:, i+1], eigvecs[:, i]
         eigvecs[:, i:i+2] *= np.sqrt(2 / np.abs(val))
     return eigvecs
-
-def construct_V(M):
-    """Construct normalization matrix from transfer matrix."""
-    eigvals, eigvecs = la.eig(M)
-    eigvecs = normalize(eigvecs)
-    v1, _, v2, _ = eigvecs.T
+    
+    
+def construct_V(eigvecs):
+    v1, _, v2, _ = normalize(eigvecs).T
     V = np.zeros((4, 4))
     V[:, 0] = v1.real
     V[:, 1] = (1j * v1).real
@@ -42,11 +44,16 @@ def construct_V(M):
     V[:, 3] = (1j * v2).real
     return V
 
+
 def construct_Sigma(V, e1, e2):
     return la.multi_dot([V, np.diag([e1, e1, e2, e2]), V.T])
 
+
 def get_matched_Sigma(M, e1=1., e2=1.):
-    return construct_Sigma(construct_V(M), e1, e2)
+    eigvals, eigvecs = la.eig(M)
+    V = construct_V(eigvecs)
+    return construct_Sigma(V, e1, e2)
+    
     
 def extract_twiss(V):
     b1x = V[0, 0]**2
@@ -62,3 +69,9 @@ def extract_twiss(V):
     a1y = (u*np.sin(nu1) - V[3, 0]*np.sqrt(b1y)) / np.cos(nu1)
     a2x = (u*np.sin(nu2) - V[1, 2]*np.sqrt(b2x)) / np.cos(nu2)
     return a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y, u, nu1, nu2
+
+
+def symplectic_diag(Sigma):
+    eigvals, eigvecs = la.eig(np.matmul(Sigma, U))
+    Vinv = la.inv(construct_V(eigvecs))
+    return la.multi_dot([Vinv, Sigma, Vinv.T])

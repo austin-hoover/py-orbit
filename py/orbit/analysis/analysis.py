@@ -7,6 +7,7 @@ def covmat2vec(S):
                      S[1,1], S[1,2], S[1,3],
                      S[2,2], S[2,3],
                      S[3,3]])
+                    
 
 def coords(bunch, mm_mrad=True):
     """Return the transverse coordinate array from the bunch."""

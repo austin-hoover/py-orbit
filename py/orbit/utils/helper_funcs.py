@@ -199,9 +199,9 @@ def get_coords(bunch, mm_mrad=False):
     return X
     
     
-def dist_to_bunch(X, bunch, bunch_length):
+def dist_to_bunch(X, bunch, length):
     for (x, xp, y, yp) in X:
-        z = bunch_length * np.random.random()
+        z = length * np.random.random()
         bunch.addParticle(x, xp, y, yp, z, 0.)
     return bunch
     
