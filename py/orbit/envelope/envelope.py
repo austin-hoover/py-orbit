@@ -427,7 +427,7 @@ class Envelope:
         self.fit_param_vec(np.array([ax, ay, bx, by, r, nu]), eps, mode)
         
     def match(self, lattice, nturns, mode, tol, max_attempts=100, radius=0.75,
-              display=True, verbose=0):
+              display=True, verbose=0, indent=4):
         """Modify the envelope so that is matched to the lattice.
         
         For certain combinations of lattice coupling, mode emittances, and beam
@@ -460,15 +460,18 @@ class Envelope:
             Whether to diplay the optimizer progress on each attempt (0, 1, or
              2). 0 is no output, 1 shows the end result, and 2 shows each
             iteration of the optimizer.
+        indent : int
+            The number of spaces to indent when displaying results.
         """
         init_param_vec = self.param_vec()
         for i in range(max_attempts):
             cost = self._match(lattice, mode, nturns, verbose=0)
             if display:
-                print '    cost = {:.2e},  attempt {}'.format(cost, i + 1)
+                print indent*' ' + 'cost = {:.2e},  attempt {}'.format(
+                    cost, i + 1)
             if cost < tol:
                 if display:
-                    print '    SUCCESS'
+                    print indent*' ' + 'SUCCESS'
                 break
             self.perturb(radius, mode, init_param_vec)
                 
