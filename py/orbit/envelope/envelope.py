@@ -211,7 +211,7 @@ class Envelope:
         tune_y = (muy1 - muy0) / (2*np.pi)
         tune_x %= 1
         tune_y %= 1
-        return tune_x, tune_y
+        return np.array([tune_x, tune_y])
         
     def fit_cov(self, Sigma, verbose=0):
         """Fit the envelope to the covariance matrix Sigma."""
@@ -426,7 +426,8 @@ class Envelope:
         
         self.fit_param_vec(np.array([ax, ay, bx, by, r, nu]), eps, mode)
         
-    def match(self, lattice, nturns, mode, tol, max_attempts=100, radius=0.75):
+    def match(self, lattice, nturns, mode, tol, max_attempts=100, radius=0.75,
+              display=True, verbose=0):
         """Modify the envelope so that is matched to the lattice.
         
         For certain combinations of lattice coupling, mode emittances, and beam
@@ -453,14 +454,21 @@ class Envelope:
             Each parameter p in the initial parameter vector will be modified in
             the interval [(1 - radius)*p, (1 + radius)*p]. The best value I have
             found is 0.75.
+        display : bool
+            Whether to print the output of each attempt.
+        verbose : int
+            Whether to diplay the optimizer progress on each attempt (0, 1, or
+             2). 0 is no output, 1 shows the end result, and 2 shows each
+            iteration of the optimizer.
         """
-        print 'Matching.'
         init_param_vec = self.param_vec()
         for i in range(max_attempts):
             cost = self._match(lattice, mode, nturns, verbose=0)
-            print '    cost = {:.2e},  attempt {}'.format(cost, i + 1)
+            if display:
+                print '    cost = {:.2e},  attempt {}'.format(cost, i + 1)
             if cost < tol:
-                print '    SUCCESS'
+                if display:
+                    print '    SUCCESS'
                 break
             self.perturb(radius, mode, init_param_vec)
                 
