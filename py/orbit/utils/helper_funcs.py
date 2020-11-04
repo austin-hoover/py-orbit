@@ -18,6 +18,7 @@ from orbit.bunch_generators import (
     GaussDist2D,
     KVDist2D
 )
+from orbit.utils.consts import classical_proton_radius
 from orbit_utils import Matrix
 
 
@@ -26,8 +27,7 @@ from orbit_utils import Matrix
 def get_perveance(energy, mass, density):
     gamma = 1 + (energy / mass) # Lorentz factor
     beta = np.sqrt(1 - (1 / (gamma**2))) # v/c
-    r0 = 1.53469e-18 # classical proton radius [m]
-    return (2 * r0 * density) / (beta**2 * gamma**3)
+    return (2 * classical_proton_radius * density) / (beta**2 * gamma**3)
     
     
 def lattice_from_file(file, seq, fringe=False):
@@ -38,7 +38,7 @@ def lattice_from_file(file, seq, fringe=False):
     return lattice
     
 
-def fodo_lattice(k, L, fill_fac=0.5, tilt_qf=0, tilt_qd=0):
+def fodo_lattice(k, L, fill_fac=0.5, angle=0, fringe=False):
 
     lattice = TEAPOT_Lattice()
     drift1 = teapot.DriftTEAPOT('drift1')
@@ -54,18 +54,20 @@ def fodo_lattice(k, L, fill_fac=0.5, tilt_qf=0, tilt_qd=0):
     qd.setLength(L * fill_fac / 2)
     qf.addParam('kq', +k)
     qd.addParam('kq', -k)
-    qf.setTiltAngle(tilt_qf)
-    qd.setTiltAngle(tilt_qd)
+    qf.setTiltAngle(+angle)
+    qd.setTiltAngle(-angle)
 
     lattice.addNode(drift1)
     lattice.addNode(qf)
     lattice.addNode(drift2)
     lattice.addNode(qd)
     lattice.addNode(drift3)
+    
+    lattice.set_fringe(False)
     lattice.initialize()
     return lattice
     
-
+    
 def transfer_matrix(lattice, mass, energy):
     """Get linear transfer matrix as NumPy array."""
     matrixGenerator = MatrixGenerator()
@@ -87,6 +89,10 @@ def is_stable(M):
         if abs(la.norm(eigval) - 1) > 1e-3:
             return False
     return True
+    
+    
+def eigtunes(M):
+    return np.arccos(la.eigvals(M).real)
     
     
 def twiss_at_injection(lattice, mass, energy):

@@ -5,3 +5,4 @@ mass_proton =  0.938272029 # GeV/c^2
 mass_electron = 0.000511 # GeV/c^2
 mass_electron_mks =  9.10938291e-31 # kg
 charge_electron = 1.602176e-19 # Coulomb
+classical_proton_radius = 1.53469e-18 # m

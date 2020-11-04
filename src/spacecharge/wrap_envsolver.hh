@@ -1,5 +1,5 @@
-#ifndef WRAP_ENVSOLVER_KV_H
-#define WRAP_ENVSOLVER_KV_H
+#ifndef WRAP_ENVSOLVER_H
+#define WRAP_ENVSOLVER_H
 
 #include "Python.h"
 
@@ -8,11 +8,11 @@ extern "C" {
 #endif
 
   namespace wrap_spacecharge{
-    void initEnvSolverKV(PyObject* module);
+    void initEnvSolver(PyObject* module);
   }
     
 #ifdef __cplusplus
 }
 #endif // __cplusplus
 
-#endif // WRAP_ENVSOLVER_KV_H
+#endif // WRAP_ENVSOLVER_H
