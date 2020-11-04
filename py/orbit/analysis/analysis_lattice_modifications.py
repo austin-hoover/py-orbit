@@ -72,7 +72,8 @@ def add_analysis_nodes(lattice, output_dir, min_sep=0.00001):
     return analysis_nodes
     
     
-def add_env_monitor_nodes(lattice, filename_env, path_testbunch='', min_sep=0.00001):
+def add_env_monitor_nodes(lattice, filename_env, path_testbunch='',
+                          tbt=False, min_sep=1e-5):
     """Add envelope monitor nodes at start of each node in lattice.
     
     Parameters
@@ -82,12 +83,11 @@ def add_env_monitor_nodes(lattice, filename_env, path_testbunch='', min_sep=0.00
     filename_env : str
         The file to store the envelope parameters.
     path_testbunch : str
-        The directory to store the test bunch coordinates.
-    constructor : AccNode object
-        The constructor for the monitor node which is called as
-        monitor_node = Constructor(filename, position, name).
+        The directory to store the test bunch coordinates. The coordinates
+        will be written to files like '/path_testbunch/coords_0.dat'.
     tbt : bool
-        If True, the parameters are tracked turn-by-
+        If True, the bunch coordinates specify the turn number. If False, the
+        bunch coordinates specify the position in the lattice.
     min_sep : float
         The minimum separation between the monitor nodes.
         
@@ -103,7 +103,8 @@ def add_env_monitor_nodes(lattice, filename_env, path_testbunch='', min_sep=0.00
     monitor_nodes = []
     for (node, idx, position) in idx_pos_list(nodes, min_sep):
         name = ''.join(['env_monitor_', str(idx)])
-        monitor_node = EnvMonitorNode(filename_env, path_testbunch, position, name)
+        monitor_node = EnvMonitorNode(
+            filename_env, path_testbunch, position, name, tbt)
         monitor_node.setTiltAngle(-node.getAllChildren()[0].getTiltAngle())
         node.addChildNode(monitor_node, AccNode.BODY, idx, AccNode.BEFORE)
         monitor_nodes.append(monitor_node)

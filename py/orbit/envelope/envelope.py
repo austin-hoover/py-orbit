@@ -323,8 +323,8 @@ class Envelope:
         """
         bunch, params_dict = initialize_bunch(self.mass, self.energy)
         a, b, ap, bp, e, f, ep, fp = self.params
-        bunch.addParticle(a, ap, e, ep, 0, 0)
-        bunch.addParticle(b, bp, f, fp, 0, 0)
+        bunch.addParticle(a, ap, e, ep, 0., 0.)
+        bunch.addParticle(b, bp, f, fp, 0., 0.)
         if nparts > 0:
             for (x, xp, y, yp) in self.generate_dist(nparts):
                 z = np.random.random() * bunch_length
