@@ -302,24 +302,14 @@ class Envelope:
         b, bp, f, fp = bunch.x(1), bunch.xp(1), bunch.y(1), bunch.yp(1)
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         return self.params
-         
-    def to_bunch(self):
-        """Create bunch with the first two particles storing the envelope
-        parameters."""
-        bunch, params_dict = initialize_bunch(self.mass, self.energy)
-        a, b, ap, bp, e, f, ep, fp = self.params
-        bunch.addParticle(a, ap, e, ep, 0, 0)
-        bunch.addParticle(b, bp, f, fp, 0, 0)
-        return bunch, params_dict
         
-    def dist_to_bunch(self, nparts, bunch_length):
-        """Generate a distribution of particles from the envelope and store
-        in Bunch object.
+    def to_bunch(self, nparts=0, bunch_length=0):
+        """Add the envelope parameters to a Bunch object.
         
         Parameters
         ----------
         nparts : int
-            The number of particles in the bunch.
+            The number of particles in the bunch. The bunch will just hold the envelope parameters if nparts == 0.
         bunch_length : float
             The length of the bunch (meters).
         
@@ -331,11 +321,14 @@ class Envelope:
         params_dict : dict
             The dictionary of parameters for the bunch.
         """
-        X = self.generate_dist(nparts)
-        z = bunch_length * np.random.random(nparts)
-        bunch, params_dict = self.to_bunch()
-        for (x, xp, y, yp), _z in zip(X, z):
-            bunch.addParticle(x, xp, y, yp, _z, 0.)
+        bunch, params_dict = initialize_bunch(self.mass, self.energy)
+        a, b, ap, bp, e, f, ep, fp = self.params
+        bunch.addParticle(a, ap, e, ep, 0, 0)
+        bunch.addParticle(b, bp, f, fp, 0, 0)
+        if nparts > 0:
+            for (x, xp, y, yp) in self.generate_dist(nparts):
+                z = np.random.random() * bunch_length
+                bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
     def _match(self, lattice, mode, nturns=1, verbose=0):
