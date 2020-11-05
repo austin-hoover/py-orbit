@@ -24,6 +24,10 @@ from orbit_utils import Matrix
 
 #------------------------------------------------------------------------------
          
+def tprint(string, indent=0):
+    print indent*' ' + str(string)
+    
+         
 def get_perveance(energy, mass, density):
     gamma = 1 + (energy / mass) # Lorentz factor
     beta = np.sqrt(1 - (1 / (gamma**2))) # v/c
@@ -38,34 +42,42 @@ def lattice_from_file(file, seq, fringe=False):
     return lattice
     
 
-def fodo_lattice(k, L, fill_fac=0.5, angle=0, fringe=False):
+def fodo_lattice(mu1, mu2, L, fill_fac, angle=0, fringe=False):
 
-    lattice = TEAPOT_Lattice()
-    drift1 = teapot.DriftTEAPOT('drift1')
-    drift2 = teapot.DriftTEAPOT('drift2')
-    drift3 = teapot.DriftTEAPOT('drift3')
-    qf = teapot.QuadTEAPOT('qf')
-    qd = teapot.QuadTEAPOT('qd')
+    def fodo(k1, k2):
+        lattice = TEAPOT_Lattice()
+        drift1 = teapot.DriftTEAPOT('drift1')
+        drift2 = teapot.DriftTEAPOT('drift2')
+        drift3 = teapot.DriftTEAPOT('drift3')
+        qf = teapot.QuadTEAPOT('qf')
+        qd = teapot.QuadTEAPOT('qd')
+        qf.addParam('kq', +k1)
+        qd.addParam('kq', -k2)
+        drift1.setLength(L * (1 - fill_fac) / 4)
+        drift2.setLength(L * (1 - fill_fac) / 2)
+        drift3.setLength(L * (1 - fill_fac) / 4)
+        qf.setLength(L * fill_fac / 2)
+        qd.setLength(L * fill_fac / 2)
+        lattice.addNode(drift1)
+        lattice.addNode(qf)
+        lattice.addNode(drift2)
+        lattice.addNode(qd)
+        lattice.addNode(drift3)
+        lattice.set_fringe(fringe)
+        lattice.initialize()
+        return lattice
 
-    drift1.setLength(L * (1 - fill_fac) / 4)
-    drift2.setLength(L * (1 - fill_fac) / 2)
-    drift3.setLength(L * (1 - fill_fac) / 4)
-    qf.setLength(L * fill_fac / 2)
-    qd.setLength(L * fill_fac / 2)
-    qf.addParam('kq', +k)
-    qd.addParam('kq', -k)
-    qf.setTiltAngle(+angle)
-    qd.setTiltAngle(-angle)
+    def cost(kvals, correct_tunes):
+        lattice = fodo(*kvals)
+        M = transfer_matrix(lattice, mass, energy)
+        calculated_tunes = eigtunes(M)
+        return correct_tunes - calculated_tunes
 
-    lattice.addNode(drift1)
-    lattice.addNode(qf)
-    lattice.addNode(drift2)
-    lattice.addNode(qd)
-    lattice.addNode(drift3)
-    
-    lattice.set_fringe(False)
-    lattice.initialize()
-    return lattice
+    correct_tunes = np.array([mu1, mu2])
+    k0 = np.array([0.5, 0.5]) # ~ 80 deg phase advance
+    result = opt.least_squares(cost, k0, args=(correct_tunes,))
+    k1, k2 = result.x
+    return fodo(k1, k2)
     
     
 def transfer_matrix(lattice, mass, energy):
