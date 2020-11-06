@@ -4,6 +4,7 @@ This module contains functions for use in PyORBIT scripts.
 
 import numpy as np
 import numpy.linalg as la
+import scipy.optimize as opt
 from tqdm import trange
 
 # PyORBIT modules
@@ -69,9 +70,8 @@ def fodo_lattice(mu1, mu2, L, fill_fac, angle=0, fringe=False):
 
     def cost(kvals, correct_tunes):
         lattice = fodo(*kvals)
-        M = transfer_matrix(lattice, mass, energy)
-        calculated_tunes = eigtunes(M)
-        return correct_tunes - calculated_tunes
+        M = transfer_matrix(lattice, mass=0.93827231, energy=1)
+        return correct_tunes - np.degrees(eigtunes(M)[[0, 2]])
 
     correct_tunes = np.array([mu1, mu2])
     k0 = np.array([0.5, 0.5]) # ~ 80 deg phase advance
