@@ -59,6 +59,8 @@ def fodo_lattice(mu1, mu2, L, fill_fac, angle=0, fringe=False):
         drift3.setLength(L * (1 - fill_fac) / 4)
         qf.setLength(L * fill_fac / 2)
         qd.setLength(L * fill_fac / 2)
+        qf.setTiltAngle(+angle)
+        qd.setTiltAngle(-angle)
         lattice.addNode(drift1)
         lattice.addNode(qf)
         lattice.addNode(drift2)
