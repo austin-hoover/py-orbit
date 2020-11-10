@@ -12,7 +12,14 @@ from tqdm import trange
 # PyORBIT modules
 from bunch import Bunch
 from orbit.analysis import covmat2vec
-from orbit.utils.helper_funcs import initialize_bunch
+from orbit.coupling import bogacz_lebedev as BL
+from orbit.utils.helper_funcs import (
+    initialize_bunch,
+    tprint,
+    transfer_matrix,
+    twiss_at_injection,
+    is_stable
+)
 
 
 def rotation_matrix(phi):
@@ -66,27 +73,26 @@ def SigmaBL(ax, ay, bx, by, u, nu, eps, mode=1):
                            [s14, s24, s34, s44]])
                            
     
-def bounds(pad=1e-4):
-    """Return bounds for optimizer."""
-    nu_min, nu_max = pad, np.pi - pad
-    r_min, r_max = pad, 1 - pad
-    alpha_min, alpha_max = -np.inf, np.inf
-    beta_min, beta_max = pad, np.inf
-    bounds = (
-        (alpha_min, alpha_min, beta_min, beta_min, r_min, nu_min),
-        (alpha_max, alpha_max, beta_max, beta_max, r_max, nu_max)
-    )
-    return bounds
-        
+pad = 1e-10
+nu_min, nu_max = pad, np.pi - pad
+r_min, r_max = pad, 1 - pad
+alpha_min, alpha_max = -np.inf, np.inf
+beta_min, beta_max = pad, np.inf
+lb = (alpha_min, alpha_min, beta_min, beta_min, r_min, nu_min)
+ub = (alpha_max, alpha_max, beta_max, beta_max, r_max, nu_max)
+bounds = (lb, ub)
+Bounds = opt.Bounds(lb, ub)
+
 
 class Envelope:
 
-    def __init__(self, params=None, mass=1., energy=1.):
+    def __init__(self, params=None, mass=1., energy=1., eps=1.):
         self.params = params
         if params is None:
             self.params = np.array([1, 0, 0, 1, 0, -1, 1, 0])
         self.mass = mass
         self.energy = energy
+        self.eps = eps
                 
     def matrix(self):
         """Convert the envelope parameters to the envelope matrix."""
@@ -115,16 +121,15 @@ class Envelope:
         
     def twissBL(self, mode):
         """Get the mode Twiss parameters, as defined by Bogacz & Lebedev."""
-        ax, ay, bx, by, ex, ey = self.twiss()
-        eps = ex + ey
+        ax, ay, bx, by, _, _ = self.twiss()
         if mode == 1:
-            u = ey / eps
+            u = ey / self.eps
             bx *= (1 - u)
             ax *= (1 - u)
             by *= u
             ay *= u
         elif mode == 2:
-            u = ex / eps
+            u = ex / self.eps
             bx *= u
             ax *= u
             by *= (1 - u)
@@ -258,10 +263,10 @@ class Envelope:
         ax, ay, bx, by, ex, ey = self.twiss()
         return np.array([ax, ay, bx, by, ex/(ex+ey), self.phase_diff()])
         
-    def fit_param_vec(self, param_vec, eps, mode):
+    def fit_param_vec(self, param_vec, mode):
         """Get envelope parameters from the parameter vector."""
         ax, ay, bx, by, r, nu = param_vec
-        self.fit_twiss(ax, ay, bx, by, r*eps, (1-r)*eps, nu, mode)
+        self.fit_twiss(ax, ay, bx, by, r*self.eps, (1-r)*self.eps, nu, mode)
         return self.params
         
     def get_part_coords(self, psi=0):
@@ -291,6 +296,7 @@ class Envelope:
         X : NumPy array, shape (nparts, 4)
             The coordinate array for the distribution.
         """
+        nparts = int(nparts)
         psis = np.linspace(0, 2*np.pi, nparts)
         X = np.array([self.get_part_coords(psi) for psi in psis])
         radii = np.sqrt(np.random.random(size=(nparts, 1)))
@@ -331,6 +337,19 @@ class Envelope:
                 bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
+    def match_barelattice(self, lattice, mode, r=0.5):
+        """Match to lattice without space charge."""
+        ax, ay, bx, by = twiss_at_injection(lattice, self.mass, self.energy)
+        self.fit_twiss(ax, ay, bx, by, r*self.eps, (1-r)*self.eps, np.pi/2, mode)
+        if lattice.has_tilted_elements():
+            M = transfer_matrix(lattice, self.mass, self.energy)
+            if not is_stable(M):
+                print 'WARNING: bare lattice transfer matrix is not stable.'
+            e1 = self.eps if mode == 1 else 0
+            e2 = self.eps if mode == 2 else 0
+            Sigma = BL.get_matched_Sigma(M, e1, e2)
+            self.fit_cov(Sigma)
+        
     def _match(self, lattice, mode, nturns=1, verbose=0):
         """Run least squares optimization to find matched envelope.
         
@@ -352,26 +371,32 @@ class Envelope:
         verbose : int
             Whether to diplay the optimizer progress (0, 1, or 2). 0 is no
             output, 1 shows the end result, and 2 shows each iteration.
+            
+        Returns
+        -------
+        result : scipy.optimize.OptimizeResult object
+            See the documentation for the description. The two important fields
+            are `x`: the final parameter vector, and `cost`: the final cost
+            function.
         """
-        def cost(param_vec, lattice, mode, eps, nturns=1):
-            self.fit_param_vec(param_vec, eps, mode)
+        def cost(param_vec, lattice, mode, nturns=1):
+            self.fit_param_vec(param_vec, mode)
             initial_cov_mat = self.cov()
             self.track(lattice)
             return 1e12 * covmat2vec(self.cov() - initial_cov_mat)
             
-        ax, ay, bx, by, ex, ey = self.twiss()
-        eps = ex + ey
+        ax, ay, bx, by, _, _ = self.twiss()
         result = opt.least_squares(
             cost,
             self.param_vec(),
-            args=(lattice, mode, eps, nturns),
-            bounds=bounds(1e-4),
+            args=(lattice, mode, nturns),
+            bounds=bounds,
             verbose=verbose,
             xtol=1e-12
         )
-        self.fit_param_vec(result.x, eps, mode)
-        return result.cost
-            
+        self.fit_param_vec(result.x, mode)
+        return result
+
     def perturb(self, radius, mode, param_vec=None):
         """Randomly perturb the envelope about param_vec.
         
@@ -388,10 +413,11 @@ class Envelope:
         """
         lo, hi = 1 - radius, 1 + radius
         
-        _, _, _, _, ex, ey = self.twiss()
-        eps = ex + ey
+        ax, ay, bx, by, ex, ey = self.twiss()
+        r = ex / self.eps
+        nu = self.phase_diff()
         if param_vec is None:
-            param_vec = np.array([ax, ay, bx, by, ex/(ex+ey), self.phase_diff()])
+            param_vec = np.array([ax, ay, bx, by, r, nu])
         ax, ay, bx, by, r, nu = param_vec
    
         ax = np.random.uniform(lo*ax, hi*ax)
@@ -410,24 +436,25 @@ class Envelope:
 
         nu_lo = lo * nu
         nu_hi = hi * nu
-        if nu_lo < 0.01 * np.pi:
-            nu_lo = 0.01 * np.pi
-        if nu_hi > 0.99 * np.pi:
-            nu_hi = 0.99 * np.pi
+        if nu_lo < 0.05 * np.pi:
+            nu_lo = 0.05 * np.pi
+        if nu_hi > 0.95 * np.pi:
+            nu_hi = 0.95 * np.pi
         nu = np.random.uniform(nu_lo, nu_hi)
 
         r_lo = lo * r
         r_hi = hi * r
-        if r_lo < 0.01:
-            r_lo = 0.01
-        if r_hi > 0.99:
-            r_hi = 0.99
+        if r_lo < 0.05:
+            r_lo = 0.05
+        if r_hi > 0.95:
+            r_hi = 0.95
         r = np.random.uniform(r_lo, r_hi)
         
-        self.fit_param_vec(np.array([ax, ay, bx, by, r, nu]), eps, mode)
+        param_vec = np.array([ax, ay, bx, by, r, nu])
+        self.fit_param_vec(param_vec, mode)
         
     def match(self, lattice, nturns, mode, tol, max_attempts=100, radius=0.75,
-              display=True, verbose=0, indent=4):
+              display=False, verbose=0, indent=4):
         """Modify the envelope so that is matched to the lattice.
         
         For certain combinations of lattice coupling, mode emittances, and beam
@@ -464,17 +491,26 @@ class Envelope:
             The number of spaces to indent when displaying results.
         """
         init_param_vec = self.param_vec()
+        low_cost = np.inf
         for i in range(max_attempts):
-            cost = self._match(lattice, mode, nturns, verbose=0)
+            result = self._match(lattice, mode, nturns, verbose=0)
+            cost = result.cost
             if display:
-                print indent*' ' + 'cost = {:.2e},  attempt {}'.format(
-                    cost, i + 1)
+                tprint('cost = {:.2e},  attempt {}'.format(cost, i+1), indent)
             if cost < tol:
                 if display:
-                    print indent*' ' + 'SUCCESS'
+                    tprint('SUCCESS', indent)
                 break
+            if cost < low_cost:
+                low_cost = cost
+                init_param_vec = np.copy(self.param_vec())
+                tprint('Cost improved -- changing seed', indent + 4)
+                tprint('radius = {}'.format(radius), indent + 4)
             self.perturb(radius, mode, init_param_vec)
-                
+        
+        if cost >= tol:
+            print 'Did not converge'
+                            
     def get_transfer_matrix(self, lattice):
         """Compute the linear transfer matrix with space charge included.
         
@@ -525,3 +561,11 @@ class Envelope:
                 y2 = X[i + 1 + 4, j]
                 M[j, i] = ((y1-y0)*x2*x2 - (y2-y0)*x1*x1) / (x1*x2*(x2-x1))
         return M
+        
+    def print_twiss(self):
+        ax, ay, bx, by, ex, ey = self.twiss()
+        nu = self.phase_diff()
+        print 'ax, ay = {:.2f}, {:.2f} rad'.format(ax, ay)
+        print 'bx, by = {:.2f}, {:.2f} m'.format(bx, by)
+        print 'ex, ey = {:.2e}, {:.2e} mm*mrad'.format(1e6*ex, 1e6*ey)
+        print 'nu = {:.2f} deg'.format(np.degrees(nu))
