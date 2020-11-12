@@ -43,9 +43,31 @@ def lattice_from_file(file, seq, fringe=False):
     return lattice
     
 
-def fodo_lattice(mu1, mu2, L, fill_fac, angle=0, fringe=False):
+def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
+    """Create (O-F-O-O-D-O) lattice.
+    
+    Parameters
+    ----------
+    mux{y}: float
+        The x{y} lattice phase advance [deg]. These are the phase advances
+        when the lattice is uncoupled (`angle` == 0).
+    L : float
+        The length of the lattice.
+    fill_fac : float
+        The fraction of the lattice occupied by quadrupoles.
+    angle : float
+        The skew or tilt angle of the quads [deg]. The focusing
+        quad is rotated clockwise by angle, and the defocusing quad is
+        rotated counterclockwise by angle.
+    fringe : bool
+        Whether to include nonlinear fringe fields in the lattice.
+    """
+    angle = np.radians(angle)
 
     def fodo(k1, k2):
+        """Create FODO lattice. k1 and k2 are the focusing strengths of the
+        focusing (1st) and defocusing (2nd) quads, respectively.
+        """
         lattice = TEAPOT_Lattice()
         drift1 = teapot.DriftTEAPOT('drift1')
         drift2 = teapot.DriftTEAPOT('drift2')
@@ -70,14 +92,14 @@ def fodo_lattice(mu1, mu2, L, fill_fac, angle=0, fringe=False):
         lattice.initialize()
         return lattice
 
-    def cost(kvals, correct_tunes):
+    def cost(kvals, correct_tunes, mass=0.93827231, energy=1):
         lattice = fodo(*kvals)
-        M = transfer_matrix(lattice, mass=0.93827231, energy=1)
-        return correct_tunes - np.degrees(eigtunes(M)[[0, 2]])
+        M = transfer_matrix(lattice, mass, energy)
+        return correct_phase_adv - np.degrees(eigtunes(M)[[0, 2]])
 
-    correct_tunes = np.array([mu1, mu2])
+    correct_phase_adv = np.array([mux, muy])
     k0 = np.array([0.5, 0.5]) # ~ 80 deg phase advance
-    result = opt.least_squares(cost, k0, args=(correct_tunes,))
+    result = opt.least_squares(cost, k0, args=(correct_phase_adv,))
     k1, k2 = result.x
     return fodo(k1, k2)
     
@@ -100,7 +122,7 @@ def transfer_matrix(lattice, mass, energy):
 def is_stable(M):
     """Determine stability of transfer matrix M."""
     for eigval in la.eigvals(M):
-        if abs(la.norm(eigval) - 1) > 1e-3:
+        if abs(la.norm(eigval) - 1) > 1e-5:
             return False
     return True
     
