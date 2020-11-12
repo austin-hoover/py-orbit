@@ -70,7 +70,7 @@ class Envelope:
     Attributes
     ----------
     params : NumPy array, shape (8,)
-        The envelope parameters [a, b, a', b', e, f, e', f']. The corodinates
+        The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
         of a particle on the beam envelope are parameterized as
             x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
             y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
