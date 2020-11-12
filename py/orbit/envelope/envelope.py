@@ -205,7 +205,8 @@ class Envelope:
         """Return the normalized envelope parameters.
         
         Here 'normalized' means the x-x' and y-y' ellipse will be upright. It
-        is not normalized in the 4D sense (diagonal covariance matrix).
+        is not normalized in the 4D sense (diagonal covariance matrix). Also,
+        this method does not actually modify the envelope.
         """
         P = self.matrix()
         ax, ay, bx, by, _, _ = self.twiss()
