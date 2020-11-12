@@ -540,7 +540,7 @@ class Envelope:
                         tol=1e-2, display=False, progbar=False):
         """Match in skew quad lattice by slowly ramping the quad tilt angle.
         
-        Tight now this method only handles a single FODO cell. For some reason
+        Right now this method only handles a single FODO cell. For some reason
         ramping the skew strength works much better than ramping the intensity.
                 
         Parameters
