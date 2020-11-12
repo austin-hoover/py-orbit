@@ -47,9 +47,17 @@ def construct_V(eigvecs):
 
 def construct_Sigma(V, e1, e2):
     return la.multi_dot([V, np.diag([e1, e1, e2, e2]), V.T])
+    
 
+def matched_Sigma_onemode(M, eps, mode):
+    eigvals, eigvecs = la.eig(M)
+    V = construct_V(eigvecs)
+    e1 = eps if mode == 1 else 0
+    e2 = eps if mode == 2 else 0
+    return construct_Sigma(V, e1, e2)
+    
 
-def get_matched_Sigma(M, e1=1., e2=1.):
+def matched_Sigma(M, e1=1., e2=1.):
     eigvals, eigvecs = la.eig(M)
     V = construct_V(eigvecs)
     return construct_Sigma(V, e1, e2)
@@ -75,3 +83,47 @@ def symplectic_diag(Sigma):
     eigvals, eigvecs = la.eig(np.matmul(Sigma, U))
     Vinv = la.inv(construct_V(eigvecs))
     return la.multi_dot([Vinv, Sigma, Vinv.T])
+    
+    
+def Vmat(ax, ay, bx, by, u, nu, mode=1):
+    """Normalization matrix for eps1 = 0 or eps2 = 0."""
+    cos, sin = np.cos(nu), np.sin(nu)
+    V = np.zeros((4, 4))
+    if mode == 1:
+        V[:2, :2] = [[np.sqrt(bx), 0],
+                     [-ax/np.sqrt(bx), (1-u)/np.sqrt(bx)]]
+        V[2:, :2] = [[np.sqrt(by)*cos, -np.sqrt(by)*sin],
+                     [(u*sin-ay*cos)/np.sqrt(by), (u*cos + ay*sin)/np.sqrt(by)]]
+    elif mode == 2:
+        V[2:, 2:] = [[np.sqrt(by), 0],
+                     [-ay/np.sqrt(by), (1-u)/np.sqrt(by)]]
+        V[:2, 2:] = [[np.sqrt(bx)*cos, -np.sqrt(bx)*sin],
+                     [(u*sin-ax*cos)/np.sqrt(bx), (u*cos + ax*sin)/np.sqrt(bx)]]
+    return V
+    
+    
+def Sigma(ax, ay, bx, by, u, nu, eps, mode=1):
+    """Covariance matrix for eps1 = 0 or eps2 = 0."""
+    cos, sin = np.cos(nu), np.sin(nu)
+    if mode == 1:
+        s11, s33 = bx, by
+        s12, s34 = -ax, -ay
+        s22 = ((1-u)**2 + ax**2) / bx
+        s44 = (u**2 + ay**2) / by
+        s13 = np.sqrt(bx*by) * cos
+        s14 = np.sqrt(bx/by) * (u*sin - ay*cos)
+        s23 = -np.sqrt(by/bx) * ((1-u)*sin + ax*cos)
+        s24 = ((ay*(1-u) - ax*u)*sin + (u*(1-u) + ax*ay)*cos) / np.sqrt(bx*by)
+    elif mode == 2:
+        s11, s33 = bx, by
+        s12, s34 = -ax, -ay
+        s22 = (u**2 + ax**2) / bx
+        s44 = ((1-u)**2 + ay**2) / by
+        s13 = np.sqrt(bx*by) * cos
+        s14 = -np.sqrt(bx/by) * ((1-u)*sin + ay*cos)
+        s23 = np.sqrt(by/bx) * (u*sin - ax*cos)
+        s24 = ((ax*(1-u) - ay*u)*sin + (u*(1-u) + ax*ay)*cos) / np.sqrt(bx*by)
+    return eps * np.array([[s11, s12, s13, s14],
+                           [s12, s22, s23, s24],
+                           [s13, s23, s33, s34],
+                           [s14, s24, s34, s44]])
