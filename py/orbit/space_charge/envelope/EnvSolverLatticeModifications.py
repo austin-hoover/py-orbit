@@ -10,8 +10,10 @@ from orbit.lattice import (
 )
 from orbit.space_charge.scLatticeModifications import setSC_General_AccNodes
 from orbit.utils.consts import classical_proton_radius
+from orbit.utils.helper_funcs import get_perveance
 
-def setEnvSolverNodes(lattice, intensity, mass, energy, max_sep, min_sep):
+
+def set_env_solver_nodes(lattice, intensity, mass, energy, max_sep, min_sep):
     """Place set of envelope solver nodes into the lattice.
     
     The method will place the set into the lattice as child nodes of
@@ -33,16 +35,18 @@ def setEnvSolverNodes(lattice, intensity, mass, energy, max_sep, min_sep):
     list[EnvSolverNode]
         The list of inserted envelope solver nodes.
     """
-    # Compute perveance
-    gamma = 1 + (energy / mass) # Lorentz factor
-    beta = np.sqrt(1 - (1 / (gamma**2))) # v/c
-    density = intensity / lattice.getLength()
-    perveance = (2 * classical_proton_radius * density) / (beta**2 * gamma**3)
-    
+
+    Q = get_perveance(energy, mass, intensity / lattice.getLength())
     lattice.split(max_sep)
     sc_nodes = setSC_General_AccNodes(
-        lattice, min_sep, EnvSolver(perveance), EnvSolverNode)
+        lattice, min_sep, EnvSolver(Q), EnvSolverNode
+    )
     for sc_node in sc_nodes:
         sc_node.setName(''.join([sc_node.getName(), 'envsolver']))
     lattice.initialize()
     return sc_nodes
+        
+        
+def set_perveance(env_solver_nodes, Q):
+    for env_solver_node in env_solver_nodes:
+        env_solver_node.sc_calculator = EnvSolver(Q)
