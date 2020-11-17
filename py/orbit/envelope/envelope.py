@@ -85,7 +85,7 @@ class Envelope:
         Whether to choose eps2=0 (mode 1) or eps1=0 (mode 2).
     """
     
-    def __init__(self, mass=1., energy=1., eps=1., mode=1, params=None):
+    def __init__(self, mass=1., energy=1., eps=1., mode=1, params=None, u=0.5):
         self.mass = mass
         self.energy = energy
         self.eps = eps
@@ -93,9 +93,13 @@ class Envelope:
         if params is not None:
             self.params = np.array(params)
         else:
-            r = np.sqrt(4 * eps/2)
-            self.params = np.array([r, 0, 0, r, 0, -r, r, 0])
-
+            ex, ey = u * eps, (1 - u) * eps
+            rx, ry = np.sqrt(4 * ex), np.sqrt(4 * ey)
+            if mode == 1:
+                self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
+            elif mode == 2:
+                self.params = np.array([rx, 0, 0, rx, 0, +ry, -ry, 0])
+                
     def norm(self):
         """Return envelope to normalized frame.
         
@@ -107,6 +111,17 @@ class Envelope:
             self.params = np.array([r_n, 0, 0, r_n, 0, 0, 0, 0])
         elif self.mode == 2:
             self.params = np.array([0, 0, 0, 0, 0, r_n, r_n, 0])
+            
+    def norm2D(self):
+        """Normalize the envelope parameters in the 2D sense.
+        
+        Here 'normalized' means the x-x' and y-y' ellipses will be circles of
+        radius 1.
+        """
+        if self.mode == 1:
+            self.params = np.array([1, 0, 0, 1, 0, -1, +1, 0])
+        elif self.mode == 2:
+            self.params = np.array([1, 0, 0, 1, 0, +1, -1, 0])
             
     def matrix(self):
         """Create the envelope matrix P from the envelope parameters.
@@ -202,11 +217,10 @@ class Envelope:
         return cx, cy
         
     def normed2D(self):
-        """Return the normalized envelope parameters.
+        """Return normalized envelope parameters in the 2D sense.
         
-        Here 'normalized' means the x-x' and y-y' ellipse will be upright. It
-        is not normalized in the 4D sense (diagonal covariance matrix). Also,
-        this method does not actually modify the envelope.
+        Here 'normalized' means the x-x' and y-y' ellipse will be upright. The
+        method does not modify the envelope.
         """
         P = self.matrix()
         ax, ay, bx, by, _, _ = self.twiss()
@@ -262,6 +276,14 @@ class Envelope:
         result = opt.least_squares(mismatch, self.params, args=(Sigma,),
                                    xtol=1e-12)
         return result.x
+        
+    def fit_twiss(self, ax, ay, bx, by, u=0.5):
+        """Fit the envelope to the 2D Twiss parameters."""
+        self.norm2D()
+        ex, ey = u*self.eps, (1-u)*self.eps
+        V = norm_mat(ax, bx, ay, by)
+        A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
+        self.transform(np.matmul(V, A))
         
     def fit_twissBL(self, twiss_params):
         """Fit the envelope to the BL Twiss parameters.
@@ -437,7 +459,7 @@ class Envelope:
             fields are `x`: the final parameter vector, and `cost`: the final
             cost function.
         """    
-        def cost(twiss_params, lattice, nturns=1):
+        def cost(twiss_params, nturns=1):
             self.fit_twissBL(twiss_params)
             Sigma0 = self.cov()
             self.track(lattice)
@@ -447,7 +469,7 @@ class Envelope:
         result = opt.least_squares(
             cost,
             self.twissBL(),
-            args=(lattice, nturns),
+            args=(nturns,),
             bounds=bounds,
             verbose=verbose,
             xtol=1e-12
@@ -457,7 +479,7 @@ class Envelope:
     
     
     def match_ramp_sc(self, lattice, solver_nodes, intensity, nturns=1,
-                     stepsize=1e-12, tol=1e-2, display=False, progbar=False):
+                     stepsize=1e12, tol=1e-2, display=False, progbar=False):
         """Match by slowly ramping the intensity.
         
         This method exists because the least squares optimizer fails to
@@ -467,7 +489,7 @@ class Envelope:
         increase the intensity, matching at each step. In this way the matched
         beam should remain close to the seed value.
         
-        This works, but the step size must be quite small (~1e-12), otherwise
+        This works, but the step size must be quite small (~1e12), otherwise
         it will randomly fail. If it fails, the method will cut the step size
         in half and restart from the last known match.
         
@@ -603,6 +625,19 @@ class Envelope:
                     tprint(
                         'FAILED. Trying stepsize={:.2e}.'.format(stepsize), 8)
                     break
+                    
+    def match_free(self, lattice):
+        """Match by varying the envelope parameters without constraints."""
+        def cost(params):
+            self.params = params
+            Sigma0 = self.cov()
+            self.track(lattice)
+            Sigma1 = self.cov()
+            return 1e12 * covmat2vec(Sigma1 - Sigma0)
+    
+        result = opt.least_squares(cost, self.params, verbose=2, xtol=1e-12)
+        return result.cost
+            
                         
     def print_twiss(self):
         """Print the horizontal and vertical Twiss parameters."""
