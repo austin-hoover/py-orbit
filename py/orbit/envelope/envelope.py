@@ -541,7 +541,7 @@ class Envelope:
             intensities = init_intensities(stepsize, start=last_matched_I)
             if progbar:
                 intensities = tqdm(intensities)
-            for i, I in enumerate(intensities):
+            for i, I in enumerate(intensities[1:]):
                 cost = match(I)
                 if display:
                     tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
