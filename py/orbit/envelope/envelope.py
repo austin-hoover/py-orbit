@@ -562,7 +562,6 @@ class Envelope:
             converged = cost < tol
             if display:
                 tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
-                tprint('nu = {:.2f}'.format(np.degrees(self.phase_diff())), 4)
             if converged:
                 # Store the matched params
                 last_matched_params = np.copy(self.params)
