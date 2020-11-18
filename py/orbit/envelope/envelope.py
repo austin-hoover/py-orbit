@@ -497,7 +497,7 @@ class Envelope:
         return result.cost
     
     
-    def match_ramp_sc(self, lattice, solver_nodes, I, nturns=1, Istep=None,
+    def match(self, lattice, solver_nodes, I, nturns=1, Istep=None,
                       tol=1e-2, max_fails=1000, Istep_max=1e16,
                       Istep_min=1e10, win_thresh=10, display=False):
         """Match by slowly ramping the intensity.
