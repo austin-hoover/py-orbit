@@ -497,7 +497,7 @@ class Envelope:
         return result.cost
     
     def match(self, lattice, solver_nodes, I, nturns=1, Istep=None, tol=1e-2,
-              max_fails=1000, Istep_max=1e16, Istep_min=1e10, win_thresh=10,
+              max_fails=1000, Istep_max=1e16, Istep_min=1e10, win_thresh=100,
               Istep_incr_fac=1.5, Istep_decr_fac=2, display=False):
         """Match by slowly ramping the intensity.
         
@@ -580,7 +580,7 @@ class Envelope:
                 if Istep > Istep_min:
                     Istep /= Istep_decr_fac
                 if display:
-                    tprint('FAILED. Trying Istep = {:.2e}.'.format(Istep), 8)
+                    tprint('Failed. New Istep = {:.2e}.'.format(Istep), 8)
             # Check stop condition
             stop = (converged and I == Imax) or fails > max_fails
             I += Istep
