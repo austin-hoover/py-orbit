@@ -173,7 +173,7 @@ class Envelope:
         by = S[2, 2] / ey
         ax = -S[0, 1] / ex
         ay = -S[2, 3] / ey
-        return ax, ay, bx, by, ex, ey
+        return np.array([ax, ay, bx, by, ex, ey])
         
     def twissBL(self):
         """Return the mode Twiss parameters, as defined by Bogacz & Lebedev."""
@@ -496,16 +496,19 @@ class Envelope:
         self.fit_twissBL(result.x)
         return result.cost
     
-    def match(self, lattice, solver_nodes, I, nturns=1, Istep=None,
-                      tol=1e-2, max_fails=1000, Istep_max=1e16,
-                      Istep_min=1e10, win_thresh=10, display=False):
+    def match(self, lattice, solver_nodes, I, nturns=1, Istep=None, tol=1e-2,
+              max_fails=1000, Istep_max=1e16, Istep_min=1e10, win_thresh=10,
+              Istep_incr_fac=1.5, Istep_decr_fac=2, display=False):
         """Match by slowly ramping the intensity.
         
         This method starts by matching the beam (in the 2D sense) to the
         bare lattice. It then increases the intensity in steps, matching at
-        each step. If it fails at any step, it will restart from the last known
-        match with a smaller step size. The step size is increased after a
-        number of successful matches.
+        each step. If it fails at any step, it will restart from the last
+        known match with a smaller step size. The step size is increased after
+        a number of successful matches.
+        
+        Generally, multiple iterations are needed when the matched beam is
+        very flat.
         
         Parameters
         ----------
@@ -559,14 +562,15 @@ class Envelope:
             converged = cost < tol
             if display:
                 tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
+                tprint('nu = {:.2f}'.format(np.degrees(self.phase_diff())), 4)
             if converged:
                 # Store the matched params
                 last_matched_params = np.copy(self.params)
                 last_matched_I = I
                 winstreak += 1
                 # Increase the step size if the method has worked recently
-                if winstreak > win_thresh and Istep < max_Istep:
-                    Istep *= 2
+                if winstreak > win_thresh and Istep < Istep_max:
+                    Istep *= Istep_incr_fac
                     winstreak = 0
                     if display:
                         tprint('Doing well. New Istep = {:.2e}'.format(Istep), 8)
@@ -575,7 +579,7 @@ class Envelope:
                 fails, winstreak = fails + 1, 0
                 self.params, I = last_matched_params, last_matched_I
                 if Istep > Istep_min:
-                    Istep *= 0.5
+                    Istep /= Istep_decr_fac
                 if display:
                     tprint('FAILED. Trying Istep = {:.2e}.'.format(Istep), 8)
             # Check stop condition
@@ -627,12 +631,17 @@ class Envelope:
         twiss_params = (ax, ay, bx, by, u, nu)
         self.fit_twissBL(twiss_params)
                         
-    def print_twiss(self):
+    def print_twiss(self, short=False, indent=4):
         """Print the horizontal and vertical Twiss parameters."""
         ax, ay, bx, by, ex, ey = self.twiss()
-        nu = self.phase_diff()
-        print 'Envelope Twiss parameters:'
-        tprint('ax, ay = {:.2f}, {:.2f} rad'.format(ax, ay), 4)
-        tprint('bx, by = {:.2f}, {:.2f} m'.format(bx, by), 4)
-        tprint('ex, ey = {:.2e}, {:.2e} mm*mrad'.format(1e6*ex, 1e6*ey), 4)
-        tprint('nu = {:.2f} deg'.format(np.degrees(nu)), 4)
+        ex, ey = 1e6 * np.array([ex, ey])
+        nu = np.degrees(self.phase_diff())
+        if short:
+            tprint('twiss_params = {}'.format(
+                np.round([ax, ay, bx, by, ex, ey], 2)), indent)
+        else:
+            print 'Envelope Twiss parameters:'
+            tprint('ax, ay = {:.2f}, {:.2f} rad'.format(ax, ay), indent)
+            tprint('bx, by = {:.2f}, {:.2f} m'.format(bx, by), indent)
+            tprint('ex, ey = {:.2e}, {:.2e} mm*mrad'.format(ex, ey), indent)
+            tprint('nu = {:.2f} deg'.format(nu), indent)
