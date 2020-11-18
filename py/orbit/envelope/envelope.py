@@ -505,8 +505,8 @@ class Envelope:
         This method starts by matching the beam (in the 2D sense) to the
         bare lattice. It then increases the intensity in steps, matching at
         each step. If it fails at any step, it will restart from the last known
-        match with a smaller step size. After a number of successful matches,
-        the step size is increased again.
+        match with a smaller step size. The step size is increased after a
+        number of successful matches.
         
         Parameters
         ----------
