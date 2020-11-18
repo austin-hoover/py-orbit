@@ -111,7 +111,7 @@ class Envelope:
             self.params = np.array([r_n, 0, 0, r_n, 0, 0, 0, 0])
         elif self.mode == 2:
             self.params = np.array([0, 0, 0, 0, 0, r_n, r_n, 0])
-            
+                        
     def norm2D(self):
         """Normalize the envelope parameters in the 2D sense.
         
@@ -122,6 +122,13 @@ class Envelope:
             self.params = np.array([1, 0, 0, 1, 0, -1, +1, 0])
         elif self.mode == 2:
             self.params = np.array([1, 0, 0, 1, 0, +1, -1, 0])
+            
+    def normed2D(self):
+        """Same as `norm2D` method, but does not modify the envelope."""
+        P = self.matrix()
+        ax, ay, bx, by, _, _ = self.twiss()
+        V = norm_mat(ax, bx, ay, by)
+        return self.to_vec(np.matmul(la.inv(V), P))
             
     def matrix(self):
         """Create the envelope matrix P from the envelope parameters.
@@ -143,6 +150,11 @@ class Envelope:
         P_new = np.matmul(M, self.matrix())
         self.params = self.to_vec(P_new)
         
+    def norm_transform(self, M):
+        """Normalize, then apply M to the coordinates."""
+        self.norm()
+        self.transform(M)
+
     def swap_xy(self):
         """Exchange (x, x') <-> (y, y')."""
         self.params[:4], self.params[4:] = self.params[4:], self.params[:4]
@@ -215,17 +227,6 @@ class Envelope:
         cy = np.sqrt(
             area**2 / (a2b2*cos2 + e2f2*sin2 -  2*(a*e + b*f)*cos*sin))
         return cx, cy
-        
-    def normed2D(self):
-        """Return normalized envelope parameters in the 2D sense.
-        
-        Here 'normalized' means the x-x' and y-y' ellipse will be upright. The
-        method does not modify the envelope.
-        """
-        P = self.matrix()
-        ax, ay, bx, by, _, _ = self.twiss()
-        V = norm_mat(ax, bx, ay, by)
-        return self.to_vec(np.matmul(la.inv(V), P))
         
     def phases(self):
         """Return the horizontal/vertical phases (in range [0, 2pi] of a
@@ -301,10 +302,9 @@ class Envelope:
         nu : float
             The x-y phase difference in range [0, pi].
         """
-        self.norm()
         ax, ay, bx, by, u, nu = twiss_params
         V = BL.Vmat(ax, ay, bx, by, u, nu, self.mode)
-        self.transform(V)
+        self.norm_transform(V)
         
     def get_part_coords(self, psi=0):
         """Return the coordinates of a single particle on the envelope."""
@@ -371,14 +371,34 @@ class Envelope:
                 bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
-    def match_barelattice(self, lattice):
-        """Match to the lattice without space charge."""
+    def match_barelattice(self, lattice, method='4D'):
+        """Match to the lattice without space charge.
+        
+        Parameters
+        ----------
+        lattice : TEAPOT_Lattice object
+            The lattice to match into (no solver nodes).
+        method : str
+            The '4D' will match to the lattice using the eigenvectors of
+            the transfer matrix. If the lattice is uncoupled, the beam will end
+            up as a horizontal or vertical line. The '2D' method will only
+            match the x-x' and y-y' ellipses of the beam using the lattice
+            Twiss parameters. It will use equal x and y emittances.
+        """
         M = self.transfer_matrix(lattice)
         if not is_stable(M):
-            print 'WARNING: bare lattice transfer matrix is not stable.'
-        Sigma = BL.matched_Sigma_onemode(M, self.eps, self.mode)
-        self.fit_cov(Sigma)
-        
+            print 'WARNING: transfer matrix is not stable.'
+        lat_params = hf.params_from_transfer_matrix(M)
+        ax, ay = [lat_params[key] for key in ('alpha_x','alpha_y')]
+        bx, by = [lat_params[key] for key in ('beta_x','beta_y')]
+        tune_x, tune_y = [lat_params[key]
+                          for key in ('frac_tune_x','frac_tune_y')]
+        if method == '2D':
+            self.fit_twiss(ax, ay, bx, by)
+        elif method == '4D':
+            eigvals, eigvecs = la.eig(M)
+            self.norm_transform(BL.construct_V(eigvecs))
+            
     def transfer_matrix(self, lattice):
         """Compute the linear transfer matrix with space charge included.
         
@@ -437,8 +457,7 @@ class Envelope:
         method does not always converge to the matched solution. In
         particular, it will fail when the lattice skew strength is large. For
         this reason it is recommended that the initial seed be as close as 
-        possible to the matched solution. This can be done using the 
-        `match_ramp_sc` or `match_ramp_tilt` method below.
+        possible to the matched solution.
         
         Parameters
         ----------
@@ -478,20 +497,16 @@ class Envelope:
         return result.cost
     
     
-    def match_ramp_sc(self, lattice, solver_nodes, intensity, nturns=1,
-                     stepsize=1e12, tol=1e-2, display=False, progbar=False):
+    def match_ramp_sc(self, lattice, solver_nodes, I, nturns=1, Istep=None,
+                      tol=1e-2, max_fails=1000, Istep_max=1e16,
+                      Istep_min=1e10, win_thresh=10, display=False):
         """Match by slowly ramping the intensity.
         
-        This method exists because the least squares optimizer fails to
-        converge in lattices with skew quads when the skew strength is large
-        for certain values of the envelope mode number. The approach here is
-        to start with a beam which is matched to the bare lattice, then slowly
-        increase the intensity, matching at each step. In this way the matched
-        beam should remain close to the seed value.
-        
-        This works, but the step size must be quite small (~1e12), otherwise
-        it will randomly fail. If it fails, the method will cut the step size
-        in half and restart from the last known match.
+        This method starts by matching the beam (in the 2D sense) to the
+        bare lattice. It then increases the intensity in steps, matching at
+        each step. If it fails at any step, it will restart from the last known
+        match with a smaller step size. After a number of successful matches,
+        the step size is increased again.
         
         Parameters
         ----------
@@ -499,133 +514,79 @@ class Envelope:
             The lattice to match into. The solver nodes should already be
             in place.
         solver_nodes : list[EnvSolverNode]
-            The list of envelope solver nodes in the lattice.
+            A list of the envelope solver nodes in the lattice. The method
+            will adjust the strengths of these nodes.
+        I : float
+            The beam intensity.
         nturns : int
             The number of passes throught the lattice before the matching
             condition is enforced.
-        intensity : float
-            The beam intensity.
-        stepsize : float
-            The intensity step size. A safe value is 1e12.
+        Istep : float
+            The intensity step size. If None, the initial step size is set
+            to the final intensity.
         tol : float
-            The maximum value of the cost function.
+            The beam is matched if the cost function is less than `tol`.
+        max_fails : int
+            The maximum number of failed matches.
+        Istep_max{Istep_min} : float
+            The maximum{minimum} intensity step size.
+        win_thresh : int
+            After `win_thresh` successful matches are performed, the step size
+            will be increased.
         display : bool
             Whether to print the result at each step.
-        progbar : bool
-            Whether to use a tqdm progress bar.
         """
         lattice_length = lattice.getLength()
-
+        if Istep is None:
+            Istep = I
+            
         def match(I):
             Q = hf.get_perveance(self.energy, self.mass, I/lattice_length)
             set_perveance(solver_nodes, Q)
-            if Q == 0:
-                self.match_barelattice(lattice)
+            if I == 0:
+                self.match_barelattice(lattice, '2D')
                 cost = 0.
             else:
                 cost = self._match(lattice, nturns)
             return cost
-       
-        def init_intensities(stepsize, start=0.):
-            if intensity == 0:
-                return [0]
-            if abs(stepsize) > intensity:
-                stepsize = intensity
-            nsteps = int(intensity / stepsize) + 1
-            return np.linspace(start, intensity, nsteps)
-        
-        converged = False
-        last_matched_I, last_matched_params = 0, np.copy(self.params)
-        
-        while not converged:
-            intensities = init_intensities(stepsize, start=last_matched_I)
-            if progbar:
-                intensities = tqdm(intensities)
-            for i, I in enumerate(intensities[1:]):
-                cost = match(I)
-                if display:
-                    tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
-                converged = cost < tol
-                if converged:
-                    last_matched_params = np.copy(self.params)
-                    last_matched_I = I
-                else:
-                    # Stop. Restart from last known matched intensity with
-                    # a smaller step size.
-                    stepsize *= 0.5
-                    self.params = last_matched_params
-                    tprint(
-                        'FAILED. Trying stepsize={:.2e}.'.format(stepsize), 8)
-                    break
-                    
-    def match_ramp_tilt(self, lattice, angle, nturns, stepsize=0.1,
-                        tol=1e-2, display=False, progbar=False):
-        """Match in skew quad lattice by slowly ramping the quad tilt angle.
-        
-        Right now this method only handles a single FODO cell. For some reason
-        ramping the skew strength works much better than ramping the intensity.
                 
-        Parameters
-        ----------
-        lattice : TEAPOT_Lattice object
-            The lattice to match into. The solver nodes should already be
-            in place. Right now it can only handle a lattice with one focusing
-            quad and one defocusing quad.
-        angle : float
-            The focusing quad will be tilted by `angle` degrees, while the 
-            defocusing quad will be tilted by -`angle` degrees.
-        nturns : int
-            The number of passes throught the lattice before the matching
-            condition is enforced.
-        stepsize : float
-            The step size for the quad tilt angle.
-        tol : float
-            The maximum value of the cost function.
-        display : bool
-            Whether to print the result at each step.
-        progbar : bool
-            Whether to use a tqdm progress bar.
-        """
-        qf = lattice.getNodeForName('qf')
-        qd = lattice.getNodeForName('qd')
+        winstreak = fails = 0
+        Imax = I
+        I, last_matched_I, last_matched_params = 0., 0., self.params
+        stop = False
         
-        def tilt_quads(angle):
-            qf.setTiltAngle(+angle)
-            qd.setTiltAngle(-angle)
-            
-        def init_angles(stepsize, start=0.):
-            if angle == 0:
-                return [0]
-            if abs(stepsize) > abs(angle):
-                stepsize = abs(angle)
-            nsteps = int(abs(angle) / stepsize) + 1
-            return np.linspace(start, angle, nsteps)
-            
-        converged = False
-        last_matched_angle, last_matched_params = 0., np.copy(self.params)
-        
-        while not converged:
-            angles = init_angles(stepsize, start=last_matched_angle)
-            if progbar:
-                angles = tqdm(angles)
-            for phi in angles:
-                tilt_quads(np.radians(phi))
-                cost = self._match(lattice, nturns)
+        while not stop:
+            cost = match(I)
+            converged = cost < tol
+            if display:
+                tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
+            if converged:
+                # Store the matched params
+                last_matched_params = np.copy(self.params)
+                last_matched_I = I
+                winstreak += 1
+                # Increase the step size if the method has worked recently
+                if winstreak > win_thresh and Istep < max_Istep:
+                    Istep *= 2
+                    winstreak = 0
+                    if display:
+                        tprint('Doing well. New Istep = {:.2e}'.format(Istep), 8)
+            else:
+                # Restart from last known match with a smaller step size.
+                fails, winstreak = fails + 1, 0
+                self.params, I = last_matched_params, last_matched_I
+                if Istep > Istep_min:
+                    Istep *= 0.5
                 if display:
-                    tprint('angle = {:.2f}, cost = {:.2e}'.format(phi, cost), 4)
-                converged = cost < tol
-                if converged:
-                    last_matched_params = np.copy(self.params)
-                    last_matched_angle = phi
-                else:
-                    # Stop. Restart from last known matched angle with a
-                    # smaller step size.
-                    stepsize *= 0.5
-                    self.params = last_matched_params
-                    tprint(
-                        'FAILED. Trying stepsize={:.2e}.'.format(stepsize), 8)
-                    break
-                    
+                    tprint('FAILED. Trying Istep = {:.2e}.'.format(Istep), 8)
+            # Check stop condition
+            stop = (converged and I == Imax) or fails > max_fails
+            I += Istep
+            if I > Imax:
+                I = Imax
+            if fails > max_fails:
+                tprint('Maximum # of failures exceeded ({})'.format(fails), 8)
+                                        
     def match_free(self, lattice):
         """Match by varying the envelope parameters without constraints."""
         def cost(params):
@@ -637,13 +598,42 @@ class Envelope:
     
         result = opt.least_squares(cost, self.params, verbose=2, xtol=1e-12)
         return result.cost
-            
+        
+    def perturb(self, lattice, radius=0.1):
+        lo, hi = 1 - radius, 1 + radius
+        ax_min, ax_max = lo*ax, hi*ax
+        ay_min, ay_max = lo*ay, hi*ay
+        bx_min, bx_max = lo*bx, hi*bx
+        by_min, by_max = lo*by, hi*by
+        u_min, u_max = lo*u, hi*u
+        nu_min, nu_max = lo*nu, hi*nu
+        if bx_min < 0.1:
+            bx_min = 0.1
+        if by_min < 0.1:
+            by_min = 0.1
+        if u_min < 0.05:
+            u_min = 0.05
+        if u_max > 0.95:
+            u_max = 0.95
+        if nu_min < 0.05 * np.pi:
+            nu_min = 0.05 * np.pi
+        if nu_max > 0.95 * np.pi:
+            nu_max = 0.95 * np.pi
+        ax = np.random.uniform(ax_min, ax_max)
+        ay = np.random.uniform(ay_min, ay_max)
+        bx = np.random.uniform(bx_min, bx_max)
+        by = np.random.uniform(by_min, by_max)
+        u = np.random.uniform(u_min, u_max)
+        nu = np.random.uniform(nu_min, nu_max)
+        twiss_params = (ax, ay, bx, by, u, nu)
+        self.fit_twissBL(twiss_params)
                         
     def print_twiss(self):
         """Print the horizontal and vertical Twiss parameters."""
         ax, ay, bx, by, ex, ey = self.twiss()
         nu = self.phase_diff()
-        print 'ax, ay = {:.2f}, {:.2f} rad'.format(ax, ay)
-        print 'bx, by = {:.2f}, {:.2f} m'.format(bx, by)
-        print 'ex, ey = {:.2e}, {:.2e} mm*mrad'.format(1e6*ex, 1e6*ey)
-        print 'nu = {:.2f} deg'.format(np.degrees(nu))
+        print 'Envelope Twiss parameters:'
+        tprint('ax, ay = {:.2f}, {:.2f} rad'.format(ax, ay), 4)
+        tprint('bx, by = {:.2f}, {:.2f} m'.format(bx, by), 4)
+        tprint('ex, ey = {:.2e}, {:.2e} mm*mrad'.format(1e6*ex, 1e6*ey), 4)
+        tprint('nu = {:.2f} deg'.format(np.degrees(nu)), 4)
