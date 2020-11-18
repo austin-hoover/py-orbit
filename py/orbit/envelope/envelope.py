@@ -496,7 +496,6 @@ class Envelope:
         self.fit_twissBL(result.x)
         return result.cost
     
-    
     def match(self, lattice, solver_nodes, I, nturns=1, Istep=None,
                       tol=1e-2, max_fails=1000, Istep_max=1e16,
                       Istep_min=1e10, win_thresh=10, display=False):
@@ -540,7 +539,7 @@ class Envelope:
         if Istep is None:
             Istep = I
             
-        def match(I):
+        def __match(I):
             Q = hf.get_perveance(self.energy, self.mass, I/lattice_length)
             set_perveance(solver_nodes, Q)
             if I == 0:
@@ -556,7 +555,7 @@ class Envelope:
         stop = False
         
         while not stop:
-            cost = match(I)
+            cost = __match(I)
             converged = cost < tol
             if display:
                 tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
