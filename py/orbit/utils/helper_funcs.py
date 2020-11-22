@@ -2,6 +2,7 @@
 This module contains functions for use in PyORBIT scripts.
 """
 
+# 3rd party
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
@@ -35,7 +36,7 @@ def get_perveance(energy, mass, density):
     return (2 * classical_proton_radius * density) / (beta**2 * gamma**3)
     
     
-def lattice_from_file(file, seq, fringe=False):
+def lattice_from_file(file, seq='', fringe=False):
     """Create lattice from madx file and turn on(off) fringe fields."""
     lattice = teapot.TEAPOT_Lattice()
     lattice.readMADX(file, seq)
@@ -43,8 +44,18 @@ def lattice_from_file(file, seq, fringe=False):
     return lattice
     
 
+def tilt_quads(lattice, angle):
+    """Tilt all focusing{defocusing} quads by +angle{-angle}."""
+    angle = np.radians(angle)
+    qf_nodes = lattice.get_nodes_containing('qf')
+    qd_nodes = lattice.get_nodes_containing('qd')
+    for qf_node, qd_node in zip(qf_nodes, qd_nodes):
+        qf_node.setTiltAngle(+angle)
+        qf_node.setTiltAngle(-angle)
+    
+
 def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
-    """Create (O-F-O-O-D-O) lattice.
+    """Create (O-F-O-O-D-O) quadrupole lattice.
     
     Parameters
     ----------
@@ -69,6 +80,8 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
         focusing (1st) and defocusing (2nd) quads, respectively.
         """
         lattice = TEAPOT_Lattice()
+        drifts = [
+            teapot.DriftTEAPOT('drift1')]
         drift1 = teapot.DriftTEAPOT('drift1')
         drift2 = teapot.DriftTEAPOT('drift2')
         drift3 = teapot.DriftTEAPOT('drift3')
@@ -104,6 +117,43 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
     return fodo(k1, k2)
     
     
+def fofo_lattice(ks1, ks2, L, fill_fac, fringe=False):
+    """Create O-F-O-O-F-O solenoid lattice.
+    
+    Parameters
+    ----------
+    ks1{2}: float
+        The field strength of the 1st{2nd} solenoid.
+    L : float
+        The length of the lattice.
+    fill_fac : float
+        The fraction of the lattice occupied by quadrupoles.
+    fringe : bool
+        Whether to include nonlinear fringe fields in the lattice.
+    """
+    lattice = TEAPOT_Lattice()
+    drift1 = teapot.DriftTEAPOT('drift1')
+    drift2 = teapot.DriftTEAPOT('drift2')
+    drift3 = teapot.DriftTEAPOT('drift3')
+    sol1 = teapot.SolenoidTEAPOT('sol1')
+    sol2 = teapot.SolenoidTEAPOT('sol2')
+    sol1.addParam('B', ks1)
+    sol2.addParam('B', ks2)
+    drift1.setLength(L * (1 - fill_fac) / 4)
+    drift2.setLength(L * (1 - fill_fac) / 2)
+    drift3.setLength(L * (1 - fill_fac) / 4)
+    sol1.setLength(L * fill_fac / 2)
+    sol2.setLength(L * fill_fac / 2)
+    lattice.addNode(drift1)
+    lattice.addNode(sol1)
+    lattice.addNode(drift2)
+    lattice.addNode(sol2)
+    lattice.addNode(drift3)
+    lattice.set_fringe(fringe)
+    lattice.initialize()
+    return lattice
+    
+    
 def transfer_matrix(lattice, mass, energy):
     """Get linear transfer matrix as NumPy array."""
     matrixGenerator = MatrixGenerator()
@@ -117,6 +167,47 @@ def transfer_matrix(lattice, mass, energy):
         for j in range(4):
             M[i, j] = transfer_mat.get(i, j)
     return M
+    
+
+def params_from_transfer_matrix(M):
+    """Return dict of lattice parameters from the transfer matrix.
+    
+    The method is taken from py/orbit/matrix_lattice/MATRIX_Lattice.py
+    """
+    keys = ['frac_tune_x', 'frac_tune_y', 'alpha_x', 'alpha_y', 'beta_x',
+            'beta_y', 'gamma_x', 'gamma_y']
+    lattice_params = {key: None for key in keys}
+    
+    cos_phi_x = (M[0, 0] + M[1, 1]) / 2
+    cos_phi_y = (M[2, 2] + M[3, 3]) / 2
+    if abs(cos_phi_x) >= 1 or abs(cos_phi_y) >= 1 :
+        return lattice_params
+    sign_x = sign_y = +1
+    if abs(M[0, 1]) != 0:
+        sign_x = M[0, 1] / abs(M[0, 1])
+    if abs(M[2, 3]) != 0:
+        sign_y = M[2, 3] / abs(M[2, 3])
+    sin_phi_x = sign_x * np.sqrt(1 - cos_phi_x**2)
+    sin_phi_y = sign_y * np.sqrt(1 - cos_phi_y**2)
+    
+    nux = sign_x * np.arccos(cos_phi_x) / (2 * np.pi)
+    nuy = sign_y * np.arccos(cos_phi_y) / (2 * np.pi)
+    beta_x = M[0, 1] / sin_phi_x
+    beta_y = M[2, 3] / sin_phi_y
+    alpha_x = (M[0, 0] - M[1, 1]) / (2 * sin_phi_x)
+    alpha_y = (M[2, 2] - M[3, 3]) / (2 * sin_phi_y)
+    gamma_x = -M[1, 0] / sin_phi_x
+    gamma_y = -M[3, 2] / sin_phi_y
+    
+    lattice_params['frac_tune_x'] = nux
+    lattice_params['frac_tune_y'] = nuy
+    lattice_params['beta_x'] = beta_x
+    lattice_params['beta_y'] = beta_y
+    lattice_params['alpha_x'] = alpha_x
+    lattice_params['alpha_y'] = alpha_y
+    lattice_params['gamma_x'] = gamma_x
+    lattice_params['gamma_y'] = gamma_y
+    return lattice_params
     
     
 def is_stable(M):
