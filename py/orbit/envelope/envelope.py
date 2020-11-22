@@ -11,7 +11,7 @@ from tqdm import trange, tqdm
 
 # PyORBIT modules
 from bunch import Bunch
-from orbit.analysis import covmat2vec
+from orbit.analysis.analysis import covmat2vec
 from orbit.coupling import bogacz_lebedev as BL
 from orbit.space_charge.envelope import (
     set_env_solver_nodes,
@@ -248,13 +248,16 @@ class Envelope:
         nu = abs(muy - mux)
         return nu if nu < np.pi else 2*np.pi - nu
         
-    def track(self, lattice, nturns=1):
+    def track(self, lattice, ntestparts=0, nturns=1):
         """Track the envelope through the lattice.
         
-        The envelope parameters are updated after it is tracked.
+        The envelope parameters are updated after it is tracked. If
+        `ntestparts` is nonzero, test particles will be tracked which receive
+        linear space charge kicks based on the envelope parmaeters.
         """
-        bunch, params_dict = self.to_bunch()
-        for _ in range(nturns):
+        bunch, params_dict = self.to_bunch(ntestparts, lattice.getLength())
+        turns = tqdm(range(nturns)) if nturns > 1 else range(nturns)
+        for _ in turns:
             lattice.trackBunch(bunch, params_dict)
         self.from_bunch(bunch)
         
@@ -331,9 +334,9 @@ class Envelope:
         """
         nparts = int(nparts)
         psis = np.linspace(0, 2*np.pi, nparts)
+        radii = np.sqrt(np.random.random((nparts, 1)))
         X = np.array([self.get_part_coords(psi) for psi in psis])
-        radii = np.sqrt(np.random.random(size=(nparts, 1)))
-        return X * np.sqrt(np.random.random((nparts, 1)))
+        return radii * X
         
     def from_bunch(self, bunch):
         """Extract the envelope parameters from a Bunch object."""
@@ -342,33 +345,37 @@ class Envelope:
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         return self.params
         
-    def to_bunch(self, nparts=0, bunch_length=0):
-        """Add the envelope parameters to a Bunch object.
+    def to_bunch(self, nparts=0, length=0, no_env=False):
+        """Add the envelope parameters to a Bunch object. The first two
+        particles represent the envelope parameters.
         
         Parameters
         ----------
         nparts : int
             The number of particles in the bunch. The bunch will just hold the
             envelope parameters if nparts == 0.
-        bunch_length : float
-            The length of the bunch (meters).
+        length : float
+            The length of the bunch [meters].
+        no_env : bool
+            If True, do not include the envelope parameters in the first
+            two bunch particles.
         
         Returns
         -------
         bunch: Bunch object
-            The bunch representing the distribution of size 2 + nparts. The
-            first two particles store the envelope parameters.
+            The bunch representing the distribution of size 2 + nparts
+            (unless `no_env` is True).
         params_dict : dict
             The dictionary of parameters for the bunch.
         """
         bunch, params_dict = initialize_bunch(self.mass, self.energy)
-        a, b, ap, bp, e, f, ep, fp = self.params
-        bunch.addParticle(a, ap, e, ep, 0., 0.)
-        bunch.addParticle(b, bp, f, fp, 0., 0.)
-        if nparts > 0:
-            for (x, xp, y, yp) in self.generate_dist(nparts):
-                z = np.random.random() * bunch_length
-                bunch.addParticle(x, xp, y, yp, z, 0.)
+        if not no_env:
+            a, b, ap, bp, e, f, ep, fp = self.params
+            bunch.addParticle(a, ap, e, ep, 0., 0.)
+            bunch.addParticle(b, bp, f, fp, 0., 0.)
+        for (x, xp, y, yp) in self.generate_dist(nparts):
+            z = np.random.random() * length
+            bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
     def match_barelattice(self, lattice, method='4D'):
@@ -498,7 +505,7 @@ class Envelope:
     
     def match(self, lattice, solver_nodes, I, nturns=1, Istep=None, tol=1e-2,
               max_fails=1000, Istep_max=1e16, Istep_min=1e10, win_thresh=100,
-              Istep_incr_fac=1.5, Istep_decr_fac=2, display=False):
+              Istep_incr=1.5, Istep_decr=2, display=False):
         """Match by slowly ramping the intensity.
         
         This method starts by matching the beam (in the 2D sense) to the
@@ -569,7 +576,7 @@ class Envelope:
                 winstreak += 1
                 # Increase the step size if the method has worked recently
                 if winstreak > win_thresh and Istep < Istep_max:
-                    Istep *= Istep_incr_fac
+                    Istep *= Istep_incr
                     winstreak = 0
                     if display:
                         tprint('Doing well. New Istep = {:.2e}'.format(Istep), 8)
@@ -578,7 +585,7 @@ class Envelope:
                 fails, winstreak = fails + 1, 0
                 self.params, I = last_matched_params, last_matched_I
                 if Istep > Istep_min:
-                    Istep /= Istep_decr_fac
+                    Istep /= Istep_decr
                 if display:
                     tprint('Failed. New Istep = {:.2e}.'.format(Istep), 8)
             # Check stop condition
@@ -601,8 +608,9 @@ class Envelope:
         result = opt.least_squares(cost, self.params, verbose=2, xtol=1e-12)
         return result.cost
         
-    def perturb(self, lattice, radius=0.1):
+    def perturb(self, radius=0.1):
         lo, hi = 1 - radius, 1 + radius
+        ax, ay, bx, by, u, nu = self.twissBL()
         ax_min, ax_max = lo*ax, hi*ax
         ay_min, ay_max = lo*ay, hi*ay
         bx_min, bx_max = lo*bx, hi*bx
