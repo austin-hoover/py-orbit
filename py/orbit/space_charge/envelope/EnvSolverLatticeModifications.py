@@ -10,10 +10,9 @@ from orbit.lattice import (
 )
 from orbit.space_charge.scLatticeModifications import setSC_General_AccNodes
 from orbit.utils.consts import classical_proton_radius
-from orbit.utils.helper_funcs import get_perveance
 
 
-def set_env_solver_nodes(lattice, intensity, mass, energy, max_sep, min_sep):
+def set_env_solver_nodes(lattice, Q, max_sep=0.01, min_sep=1e-6):
     """Place set of envelope solver nodes into the lattice.
     
     The method will place the set into the lattice as child nodes of
@@ -25,6 +24,8 @@ def set_env_solver_nodes(lattice, intensity, mass, energy, max_sep, min_sep):
     ----------
     lattice : AccLattice object
         The lattice in which to insert the nodes.
+    Q : float
+        The the beam perveance.
     max_sep : float
         The maximum separation between the nodes
     min_sep : float
@@ -35,8 +36,6 @@ def set_env_solver_nodes(lattice, intensity, mass, energy, max_sep, min_sep):
     list[EnvSolverNode]
         The list of inserted envelope solver nodes.
     """
-
-    Q = get_perveance(energy, mass, intensity / lattice.getLength())
     lattice.split(max_sep)
     sc_nodes = setSC_General_AccNodes(
         lattice, min_sep, EnvSolver(Q), EnvSolverNode
