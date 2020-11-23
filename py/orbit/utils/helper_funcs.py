@@ -44,9 +44,9 @@ def lattice_from_file(file, seq='', fringe=False):
     return lattice
     
 
-def tilt_elements_containing(lattice, string, angle):
-    """Tilt all elements with `string` in their name."""
-    [node.setTiltAngle(angle) for node in lattice.get_nodes_containing('qf')]
+def tilt_elements_containing(lattice, key, angle):
+    """Tilt all elements with `key` in their name."""
+    [node.setTiltAngle(angle) for node in lattice.get_nodes_containing(key)]
 
 
 def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False, start='drift',
