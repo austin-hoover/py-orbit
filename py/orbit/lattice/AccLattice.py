@@ -138,13 +138,20 @@ class AccLattice(NamedObject, TypedObject):
                 msg = msg + os.linesep				
                 orbitFinalize(msg)
 
-    def getNodesForName(self, name):
+    def getNodesForName(self, name, partial_match=False):
         """
         Method. Returns nodes with a certain name.
         """
         nodes = []
         for node in self.__children:
             if(node.getName().find(name) == 0):
+                nodes.append(node)
+        return nodes
+        
+    def get_nodes_containing(self, string):
+        nodes = []
+        for node in self.__children:
+            if string in node.getName():
                 nodes.append(node)
         return nodes
         

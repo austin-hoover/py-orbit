@@ -44,18 +44,14 @@ def lattice_from_file(file, seq='', fringe=False):
     return lattice
     
 
-def tilt_quads(lattice, angle):
-    """Tilt all focusing{defocusing} quads by +angle{-angle}."""
-    angle = np.radians(angle)
-    qf_nodes = lattice.get_nodes_containing('qf')
-    qd_nodes = lattice.get_nodes_containing('qd')
-    for qf_node, qd_node in zip(qf_nodes, qd_nodes):
-        qf_node.setTiltAngle(+angle)
-        qf_node.setTiltAngle(-angle)
-    
+def tilt_elements_containing(lattice, string, angle):
+    """Tilt all elements with `string` in their name."""
+    [node.setTiltAngle(angle) for node in lattice.get_nodes_containing('qf')]
 
-def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
-    """Create (O-F-O-O-D-O) quadrupole lattice.
+
+def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False, start='drift',
+                 reverse=False):
+    """Create quadrupole lattice.
     
     Parameters
     ----------
@@ -72,6 +68,16 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
         rotated counterclockwise by angle.
     fringe : bool
         Whether to include nonlinear fringe fields in the lattice.
+    start : str
+        If 'drift', the lattice will be O-F-O-O-D-O. If 'quad' the lattice will
+        be (F/2)-O-O-D-O-O-(F/2).
+    reverse : bool
+        If True, reverse the lattice elements. This places the defocusing quad
+        first.
+    
+    Returns
+    -------
+    TEAPOT_Lattice object
     """
     angle = np.radians(angle)
 
@@ -79,30 +85,51 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False):
         """Create FODO lattice. k1 and k2 are the focusing strengths of the
         focusing (1st) and defocusing (2nd) quads, respectively.
         """
+        # Instantiate elements
         lattice = TEAPOT_Lattice()
-        drifts = [
-            teapot.DriftTEAPOT('drift1')]
         drift1 = teapot.DriftTEAPOT('drift1')
         drift2 = teapot.DriftTEAPOT('drift2')
-        drift3 = teapot.DriftTEAPOT('drift3')
+        drift_half1 = teapot.DriftTEAPOT('drift_half1')
+        drift_half2 = teapot.DriftTEAPOT('drift_half2')
         qf = teapot.QuadTEAPOT('qf')
         qd = teapot.QuadTEAPOT('qd')
-        qf.addParam('kq', +k1)
-        qd.addParam('kq', -k2)
-        drift1.setLength(L * (1 - fill_fac) / 4)
-        drift2.setLength(L * (1 - fill_fac) / 2)
-        drift3.setLength(L * (1 - fill_fac) / 4)
-        qf.setLength(L * fill_fac / 2)
-        qd.setLength(L * fill_fac / 2)
-        qf.setTiltAngle(+angle)
-        qd.setTiltAngle(-angle)
-        lattice.addNode(drift1)
-        lattice.addNode(qf)
-        lattice.addNode(drift2)
-        lattice.addNode(qd)
-        lattice.addNode(drift3)
+        qf_half1 = teapot.QuadTEAPOT('qf_half1')
+        qf_half2 = teapot.QuadTEAPOT('qf_half2')
+        qd_half1 = teapot.QuadTEAPOT('qd_half1')
+        qd_half2 = teapot.QuadTEAPOT('qd_half2')
+        # Set lengths
+        half_nodes = (drift_half1, drift_half2, qf_half1, qf_half2, qd_half1,
+                      qd_half2)
+        full_nodes = (drift1, drift2, qf, qd)
+        for node in half_nodes:
+            node.setLength(L * fill_fac / 4)
+        for node in full_nodes:
+            node.setLength(L * fill_fac / 2)
+        # Set quad focusing strengths
+        for node in (qf, qf_half1, qf_half2):
+            node.addParam('kq', +k1)
+        for node in (qd, qd_half1, qd_half2):
+            node.addParam('kq', -k2)
+        # Create lattice
+        if start == 'drift':
+            lattice.addNode(drift_half1)
+            lattice.addNode(qf)
+            lattice.addNode(drift2)
+            lattice.addNode(qd)
+            lattice.addNode(drift_half2)
+        elif start == 'quad':
+            lattice.addNode(qf_half1)
+            lattice.addNode(drift1)
+            lattice.addNode(qd)
+            lattice.addNode(drift2)
+            lattice.addNode(qf_half2)
+        # Other
+        if reverse:
+            lattice.reverseOrder()
         lattice.set_fringe(fringe)
         lattice.initialize()
+        tilt_elements_containing(lattice, 'qf', +angle)
+        tilt_elements_containing(lattice, 'qd', -angle)
         return lattice
 
     def cost(kvals, correct_tunes, mass=0.93827231, energy=1):
