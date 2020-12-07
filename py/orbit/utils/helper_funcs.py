@@ -47,9 +47,21 @@ def lattice_from_file(file, seq='', fringe=False):
 def tilt_elements_containing(lattice, key, angle):
     """Tilt all elements with `key` in their name."""
     [node.setTiltAngle(angle) for node in lattice.get_nodes_containing(key)]
-
-
-def fodo_lattice(mux, muy, L, fill_fac, angle=0, fringe=False, start='drift',
+    
+    
+def is_stable(M):
+    """Determine stability of transfer matrix M."""
+    for eigval in la.eigvals(M):
+        if abs(la.norm(eigval) - 1) > 1e-5:
+            return False
+    return True
+    
+    
+def eigtunes(M):
+    return np.arccos(la.eigvals(M).real)
+    
+    
+def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
                  reverse=False):
     """Create quadrupole lattice.
     
@@ -237,18 +249,6 @@ def params_from_transfer_matrix(M):
     return lattice_params
     
     
-def is_stable(M):
-    """Determine stability of transfer matrix M."""
-    for eigval in la.eigvals(M):
-        if abs(la.norm(eigval) - 1) > 1e-5:
-            return False
-    return True
-    
-    
-def eigtunes(M):
-    return np.arccos(la.eigvals(M).real)
-    
-    
 def twiss_at_injection(lattice, mass, energy):
     """Get the Twiss parameters at s=0 in lattice."""
     bunch, params_dict = initialize_bunch(mass, energy)
@@ -258,6 +258,12 @@ def twiss_at_injection(lattice, mass, energy):
     alpha_x, alpha_y = arrPosAlphaX[0][1], arrPosAlphaY[0][1]
     beta_x, beta_y = arrPosBetaX[0][1], arrPosBetaY[0][1]
     return alpha_x, alpha_y, beta_x, beta_y
+    
+    
+def get_tunes(lattice, mass, energy):
+    M = transfer_matrix(lattice, mass, energy)
+    lattice_params = params_from_transfer_matrix(M)
+    return lattice_params['frac_tune_x'], lattice_params['frac_tune_y']
     
     
 def twiss_throughout(lattice, bunch):
