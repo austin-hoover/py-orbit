@@ -99,7 +99,10 @@ class Envelope:
                 self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
             elif mode == 2:
                 self.params = np.array([rx, 0, 0, rx, 0, +ry, -ry, 0])
-                
+        
+    def set_params(self, a, b, ap, bp, e, f, ep, fp):
+        self.params = np.array([a, b, ap, bp, e, f, ep, fp])
+        
     def norm(self):
         """Return envelope to normalized frame.
         
@@ -164,6 +167,17 @@ class Envelope:
         P = self.matrix()
         return 0.25 * np.matmul(P, P.T)
         
+    def emittances(self, mm_mrad=True):
+        """Return the horizontal/vertical rms emittance."""
+        Sigma = self.cov()
+        S = self.cov()
+        ex = np.sqrt(la.det(S[:2, :2]))
+        ey = np.sqrt(la.det(S[2:, 2:]))
+        emittances = np.array([ex, ey])
+        if mm_mrad:
+            emittances *= 1e6
+        return emittances
+        
     def twiss(self):
         """Return the horizontal/vertical Twiss parameters and emittances."""
         S = self.cov()
@@ -209,7 +223,7 @@ class Envelope:
     def radii(self, x1='x', x2='y'):
         """Return the semi-major and semi-minor axes in the x1-x2 plane."""
         a, b, ap, bp, e, f, ep, fp = self.params
-        phi = self.tilt_angle(xvar, yvar)
+        phi = self.tilt_angle(x1, x2)
         cos, sin = np.cos(phi), np.sin(phi)
         cos2, sin2 = cos**2, sin**2
         var_to_params = {
@@ -226,7 +240,7 @@ class Envelope:
             area**2 / (e2f2*cos2 + a2b2*sin2 +  2*(a*e + b*f)*cos*sin))
         cy = np.sqrt(
             area**2 / (a2b2*cos2 + e2f2*sin2 -  2*(a*e + b*f)*cos*sin))
-        return cx, cy
+        return np.array([cx, cy])
         
     def phases(self):
         """Return the horizontal/vertical phases (in range [0, 2pi] of a
@@ -378,6 +392,23 @@ class Envelope:
             bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
+    def avoid_zero_emittance(self, padding=1e-6):
+        """If the x or y emittance is truly zero, make it slightly nonzero.
+        
+        This will occur if the bare lattice has unequal tunes and we call
+        `match_barelattice(lattice, method='4D').
+        """
+        a, b, ap, bp, e, f, ep, fp = self.params
+        ex, ey = self.emittances()
+        if ex == 0:
+            a, bp = padding, padding
+        if ey == 0:
+            if self.mode == 1:
+                f, ep = -padding, +padding
+            elif self.mode == 2:
+                f, ep = +padding, -padding
+        self.set_params(a, b, ap, bp, e, f, ep, fp)
+        
     def match_barelattice(self, lattice, method='4D'):
         """Match to the lattice without space charge.
         
@@ -405,6 +436,7 @@ class Envelope:
         elif method == '4D':
             eigvals, eigvecs = la.eig(M)
             self.norm_transform(BL.construct_V(eigvecs))
+            self.avoid_zero_emittance()
             
     def transfer_matrix(self, lattice):
         """Compute the linear transfer matrix with space charge included.
