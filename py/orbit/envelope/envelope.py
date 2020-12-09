@@ -1,6 +1,12 @@
 """
 This module contains functions related to the envelope parameterization of
 the Danilov distribution.
+
+To do
+-----
+* For `match_barelattice` method, automatically figure out if the lattice is
+  coupled or has unequal phase advances from its transfer matrix. If it does
+  not, then just match in the 2D sense. Otherwise, match in the 4D sense.
 """
 
 # 3rd party
@@ -50,7 +56,7 @@ def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
     V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
     return V
 
-# Define bounds on BL twiss parameters
+# Define bounds on 4D twiss parameters
 pad = 1e-5
 nu_min, nu_max = pad, np.pi - pad
 u_min, u_max = pad, 1 - pad
@@ -69,12 +75,6 @@ class Envelope:
     
     Attributes
     ----------
-    params : NumPy array, shape (8,)
-        The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
-        of a particle on the beam envelope are parameterized as
-            x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
-            y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
-        where 0 <= psi <= 2pi.
     mass : float
         The particle mass [GeV/c^2].
     energy : float
@@ -83,17 +83,29 @@ class Envelope:
         The rms mode emittance of the beam [m*rad].
     mode : int
         Whether to choose eps2=0 (mode 1) or eps1=0 (mode 2).
+    ex_ratio : float
+        The x emittance ratio, such that ex = epsx_ratio * eps
+    params : list
+        The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
+        of a particle on the beam envelope are parameterized as
+            x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
+            y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
+        where 0 <= psi <= 2pi.
     """
-    
-    def __init__(self, mass=1., energy=1., eps=1., mode=1, params=None, u=0.5):
+    def __init__(self, mass=1., energy=1., eps=1., mode=1,  ex_ratio=0.5,
+                 params=None):
         self.mass = mass
         self.energy = energy
         self.eps = eps
         self.mode = mode
+        self.ex_ratio, self.ey_ratio = ex_ratio, 1 - ex_ratio
         if params is not None:
             self.params = np.array(params)
+            ex, ey = self.emittances()
+            self.eps = ex + ey
+            self.ex_ratio = ex / self.eps
         else:
-            ex, ey = u * eps, (1 - u) * eps
+            ex, ey = ex_ratio * eps, (1 - ex_ratio) * eps
             rx, ry = np.sqrt(4 * ex), np.sqrt(4 * ey)
             if mode == 1:
                 self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
@@ -103,40 +115,54 @@ class Envelope:
     def set_params(self, a, b, ap, bp, e, f, ep, fp):
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         
-    def norm(self):
-        """Return envelope to normalized frame.
+    def get_norm_mat_2D(self, inv=False):
+        """Return the normalization matrix (2D sense)."""
+        ax, ay, bx, by, _, _ = self.twiss2D()
+        V = norm_mat(ax, bx, ay, by)
+        if inv:
+            return la.inv(V)
+        else:
+            return V
         
-        In this frame the covariance matrix is diagonal, and the x-x' and y-y' 
-        emittances are the mode emittances.
+    def norm(self):
+        """Transform the envelope to normalized coordinates.
+        
+        In the transformed coordates the covariance matrix is diagonal, and the
+        x-x' and y-y' emittances are the mode emittances.
         """
         r_n = np.sqrt(4 * self.eps)
         if self.mode == 1:
             self.params = np.array([r_n, 0, 0, r_n, 0, 0, 0, 0])
         elif self.mode == 2:
             self.params = np.array([0, 0, 0, 0, 0, r_n, r_n, 0])
-                        
-    def norm2D(self):
-        """Normalize the envelope parameters in the 2D sense.
+                                
+    def norm2D(self, scale=False):
+        """Normalize the envelope parameters in the 2D sense and return the
+        parameters.
         
         Here 'normalized' means the x-x' and y-y' ellipses will be circles of
-        radius 1.
+        radius sqrt(ex) and sqrt(ey). The cross-plane elements of the
+        covariance matrix will not all be zero. If `scale` is True, the x-x'
+        and y-y' ellipses will be scaled to unit radius.
         """
-        if self.mode == 1:
-            self.params = np.array([1, 0, 0, 1, 0, -1, +1, 0])
-        elif self.mode == 2:
-            self.params = np.array([1, 0, 0, 1, 0, +1, -1, 0])
+        self.transform(self.get_norm_mat_2D(inv=True))
+        if scale:
+            ex, ey = 4 * self.emittances()
+            self.params[:4] /= np.sqrt(ex)
+            self.params[4:] /= np.sqrt(ey)
+        return self.params
             
-    def normed2D(self):
-        """Same as `norm2D` method, but does not modify the envelope."""
-        P = self.matrix()
-        ax, ay, bx, by, _, _ = self.twiss()
-        V = norm_mat(ax, bx, ay, by)
-        return self.to_vec(np.matmul(la.inv(V), P))
+    def normed_params_2D(self):
+        """Return the normalized envelope parameters in the 2D sense."""
+        true_params = np.copy(self.params)
+        normed_params = self.norm2D()
+        self.params = true_params
+        return normed_params
             
     def matrix(self):
         """Create the envelope matrix P from the envelope parameters.
         
-        The matrix is defined by x = Pc, where x = [x, x', y, y']^T and 
+        The matrix is defined by x = Pc, where x = [x, x', y, y']^T and
         c = [cos(psi), sin(psi)], with 0 <= psi <= 2pi. This is useful because
         any transformation to the particle coordinate vector x also done to P.
         For example, if x -> M.x, then P -> M.P.
@@ -157,6 +183,21 @@ class Envelope:
         """Normalize, then apply M to the coordinates."""
         self.norm()
         self.transform(M)
+        
+    def advance_phase(self, mux=0., muy=0.):
+        """Advance the x{y} phase by mux{muy} degrees.
+
+        It is equivalent to tracking through an uncoupled lattice which the
+        envelope is matched to.
+        """
+        mux, muy = np.radians([mux, muy])
+        V = self.get_norm_mat_2D()
+        M = la.multi_dot([V, phase_adv_matrix(mux, muy), la.inv(V)])
+        self.transform(M)
+        
+    def rotate(self, phi):
+        """Apply clockwise rotation by phi degrees in x-y space."""
+        self.transform(rotation_matrix_4D(np.radians(phi)))
 
     def swap_xy(self):
         """Exchange (x, x') <-> (y, y')."""
@@ -167,7 +208,7 @@ class Envelope:
         P = self.matrix()
         return 0.25 * np.matmul(P, P.T)
         
-    def emittances(self, mm_mrad=True):
+    def emittances(self, mm_mrad=False):
         """Return the horizontal/vertical rms emittance."""
         Sigma = self.cov()
         S = self.cov()
@@ -178,7 +219,7 @@ class Envelope:
             emittances *= 1e6
         return emittances
         
-    def twiss(self):
+    def twiss2D(self):
         """Return the horizontal/vertical Twiss parameters and emittances."""
         S = self.cov()
         ex = np.sqrt(la.det(S[:2, :2]))
@@ -189,9 +230,9 @@ class Envelope:
         ay = -S[2, 3] / ey
         return np.array([ax, ay, bx, by, ex, ey])
         
-    def twissBL(self):
+    def twiss4D(self):
         """Return the mode Twiss parameters, as defined by Bogacz & Lebedev."""
-        ax, ay, bx, by, ex, ey = self.twiss()
+        ax, ay, bx, by, ex, ey = self.twiss2D()
         if self.mode == 1:
             u = ey / self.eps
             bx *= (1 - u)
@@ -245,9 +286,8 @@ class Envelope:
     def phases(self):
         """Return the horizontal/vertical phases (in range [0, 2pi] of a
          particle with x=a, x'=a', y=e, y'=e'."""
-        a, b, ap, bp, e, f, ep, fp = self.normed2D()
-        mux = -np.arctan2(ap, a)
-        muy = -np.arctan2(ep, e)
+        a, b, ap, bp, e, f, ep, fp = self.normed_params_2D()
+        mux, muy = -np.arctan2(ap, a), -np.arctan2(ep, e)
         if mux < 0:
             mux += 2*np.pi
         if muy < 0:
@@ -262,30 +302,6 @@ class Envelope:
         nu = abs(muy - mux)
         return nu if nu < np.pi else 2*np.pi - nu
         
-    def track(self, lattice, ntestparts=0, nturns=1):
-        """Track the envelope through the lattice.
-        
-        The envelope parameters are updated after it is tracked. If
-        `ntestparts` is nonzero, test particles will be tracked which receive
-        linear space charge kicks based on the envelope parmaeters.
-        """
-        bunch, params_dict = self.to_bunch(ntestparts, lattice.getLength())
-        turns = tqdm(range(nturns)) if nturns > 1 else range(nturns)
-        for _ in turns:
-            lattice.trackBunch(bunch, params_dict)
-        self.from_bunch(bunch)
-        
-    def tunes(self, lattice):
-        """Get the fractional horizontal and vertical tunes."""
-        mux0, muy0 = self.phases()
-        self.track(lattice)
-        mux1, muy1 = self.phases()
-        tune_x = (mux1 - mux0) / (2*np.pi)
-        tune_y = (muy1 - muy0) / (2*np.pi)
-        tune_x %= 1
-        tune_y %= 1
-        return np.array([tune_x, tune_y])
-        
     def fit_cov(self, Sigma, verbose=0):
         """Fit the envelope to the covariance matrix Sigma."""
         def mismatch(params, Sigma):
@@ -295,18 +311,18 @@ class Envelope:
                                    xtol=1e-12)
         return result.x
         
-    def fit_twiss(self, ax, ay, bx, by, u=0.5):
+    def fit_twiss2D(self, ax, ay, bx, by, ex_ratio):
         """Fit the envelope to the 2D Twiss parameters."""
-        self.norm2D()
-        ex, ey = u*self.eps, (1-u)*self.eps
+        self.norm2D(scale=True)
         V = norm_mat(ax, bx, ay, by)
+        ex, ey = ex_ratio * self.eps, (1 - ex_ratio) * self.eps
         A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
         self.transform(np.matmul(V, A))
         
-    def fit_twissBL(self, twiss_params):
+    def fit_twiss4D(self, twiss_params):
         """Fit the envelope to the BL Twiss parameters.
         
-        `twiss_params` is an array containing the Bogacz-Lebedev Twiss 
+        `twiss_params` is an array containing the Bogacz-Lebedev Twiss
         parameters for a single mode: [ax, ay, bx, by, u, nu], where
             
         ax{y} : float
@@ -333,7 +349,7 @@ class Envelope:
         yp = ep*cos + fp*sin
         return np.array([x, xp, y, yp])
         
-    def generate_dist(self, nparts):
+    def generate_dist(self, nparts, density='uniform'):
         """Generate a distribution of particles from the envelope.
 
         Parameters
@@ -348,9 +364,31 @@ class Envelope:
         """
         nparts = int(nparts)
         psis = np.linspace(0, 2*np.pi, nparts)
-        radii = np.sqrt(np.random.random((nparts, 1)))
         X = np.array([self.get_part_coords(psi) for psi in psis])
-        return radii * X
+        if density == 'uniform':
+            radii = np.sqrt(np.random.random(nparts))
+        elif density == 'on_ellipse':
+            radii = np.ones(nparts)
+        elif density == 'gaussian':
+            radii = np.random.normal(size=nparts)
+        return radii[:, np.newaxis] * X
+        
+    def avoid_zero_emittance(self, padding=1e-6):
+        """If the x or y emittance is truly zero, make it slightly nonzero.
+        
+        This will occur if the bare lattice has unequal tunes and we call
+        `match_barelattice(lattice, method='4D').
+        """
+        a, b, ap, bp, e, f, ep, fp = self.params
+        ex, ey = self.emittances()
+        if ex == 0:
+            a, bp = padding, padding
+        if ey == 0:
+            if self.mode == 1:
+                f, ep = -padding, +padding
+            elif self.mode == 2:
+                f, ep = +padding, -padding
+        self.set_params(a, b, ap, bp, e, f, ep, fp)
         
     def from_bunch(self, bunch):
         """Extract the envelope parameters from a Bunch object."""
@@ -392,24 +430,31 @@ class Envelope:
             bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
-    def avoid_zero_emittance(self, padding=1e-6):
-        """If the x or y emittance is truly zero, make it slightly nonzero.
+    def track(self, lattice, ntestparts=0, nturns=1):
+        """Track the envelope through the lattice.
         
-        This will occur if the bare lattice has unequal tunes and we call
-        `match_barelattice(lattice, method='4D').
+        The envelope parameters are updated after it is tracked. If
+        `ntestparts` is nonzero, test particles will be tracked which receive
+        linear space charge kicks based on the envelope parmaeters.
         """
-        a, b, ap, bp, e, f, ep, fp = self.params
-        ex, ey = self.emittances()
-        if ex == 0:
-            a, bp = padding, padding
-        if ey == 0:
-            if self.mode == 1:
-                f, ep = -padding, +padding
-            elif self.mode == 2:
-                f, ep = +padding, -padding
-        self.set_params(a, b, ap, bp, e, f, ep, fp)
+        bunch, params_dict = self.to_bunch(ntestparts, lattice.getLength())
+        turns = tqdm(range(nturns)) if nturns > 1 else range(nturns)
+        for _ in turns:
+            lattice.trackBunch(bunch, params_dict)
+        self.from_bunch(bunch)
         
-    def match_barelattice(self, lattice, method='4D'):
+    def tunes(self, lattice):
+        """Get the fractional horizontal and vertical tunes."""
+        mux0, muy0 = self.phases()
+        self.track(lattice)
+        mux1, muy1 = self.phases()
+        tune_x = (mux1 - mux0) / (2*np.pi)
+        tune_y = (muy1 - muy0) / (2*np.pi)
+        tune_x %= 1
+        tune_y %= 1
+        return np.array([tune_x, tune_y])
+        
+    def match_barelattice(self, lattice, method='4D', avoid_zero_eps=True):
         """Match to the lattice without space charge.
         
         Parameters
@@ -432,11 +477,12 @@ class Envelope:
         tune_x, tune_y = [lat_params[key]
                           for key in ('frac_tune_x','frac_tune_y')]
         if method == '2D':
-            self.fit_twiss(ax, ay, bx, by)
+            self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
         elif method == '4D':
             eigvals, eigvecs = la.eig(M)
             self.norm_transform(BL.construct_V(eigvecs))
-            self.avoid_zero_emittance()
+            if avoid_zero_eps:
+                self.avoid_zero_emittance()
             
     def transfer_matrix(self, lattice):
         """Compute the linear transfer matrix with space charge included.
@@ -495,7 +541,7 @@ class Envelope:
         The envelope is fit to the solution returned by the optimizer. This
         method does not always converge to the matched solution. In
         particular, it will fail when the lattice skew strength is large. For
-        this reason it is recommended that the initial seed be as close as 
+        this reason it is recommended that the initial seed be as close as
         possible to the matched solution.
         
         Parameters
@@ -513,12 +559,12 @@ class Envelope:
         Returns
         -------
         result : scipy.optimize.OptimizeResult object
-            See the documentation for the description. The two important 
+            See the documentation for the description. The two important
             fields are `x`: the final parameter vector, and `cost`: the final
             cost function.
-        """    
+        """
         def cost(twiss_params, nturns=1):
-            self.fit_twissBL(twiss_params)
+            self.fit_twiss4D(twiss_params)
             Sigma0 = self.cov()
             self.track(lattice)
             Sigma1 = self.cov()
@@ -526,13 +572,13 @@ class Envelope:
     
         result = opt.least_squares(
             cost,
-            self.twissBL(),
+            self.twiss4D(),
             args=(nturns,),
             bounds=bounds,
             verbose=verbose,
             xtol=1e-12
         )
-        self.fit_twissBL(result.x)
+        self.fit_twiss4D(result.x)
         return result.cost
     
     def match(self, lattice, solver_nodes, I, nturns=1, Istep=None, tol=1e-2,
@@ -642,7 +688,7 @@ class Envelope:
         
     def perturb(self, radius=0.1):
         lo, hi = 1 - radius, 1 + radius
-        ax, ay, bx, by, u, nu = self.twissBL()
+        ax, ay, bx, by, u, nu = self.twiss4D()
         ax_min, ax_max = lo*ax, hi*ax
         ay_min, ay_max = lo*ay, hi*ay
         bx_min, bx_max = lo*bx, hi*bx
@@ -668,11 +714,11 @@ class Envelope:
         u = np.random.uniform(u_min, u_max)
         nu = np.random.uniform(nu_min, nu_max)
         twiss_params = (ax, ay, bx, by, u, nu)
-        self.fit_twissBL(twiss_params)
+        self.fit_twiss4D(twiss_params)
                         
     def print_twiss(self, short=False, indent=4):
         """Print the horizontal and vertical Twiss parameters."""
-        ax, ay, bx, by, ex, ey = self.twiss()
+        ax, ay, bx, by, ex, ey = self.twiss2D()
         ex, ey = 1e6 * np.array([ex, ey])
         nu = np.degrees(self.phase_diff())
         if short:
