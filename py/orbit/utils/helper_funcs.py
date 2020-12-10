@@ -30,7 +30,7 @@ def tprint(string, indent=0):
     print indent*' ' + str(string)
     
          
-def get_perveance(energy, mass, density):
+def get_perveance(mass, energy, density):
     gamma = 1 + (energy / mass) # Lorentz factor
     beta = np.sqrt(1 - (1 / (gamma**2))) # v/c
     return (2 * classical_proton_radius * density) / (beta**2 * gamma**3)
@@ -57,10 +57,15 @@ def is_stable(M):
     return True
     
     
-def eigtunes(M):
-    return np.arccos(la.eigvals(M).real)
+def get_eigtunes(M):
+    return np.arccos(la.eigvals(M).real)[[0, 2]]
     
-    
+
+def unequal_eigtunes(M):
+    mu1, mu2 = get_eigtunes(M)
+    return mu1 != mu2
+
+
 def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
                  reverse=False):
     """Create quadrupole lattice.
