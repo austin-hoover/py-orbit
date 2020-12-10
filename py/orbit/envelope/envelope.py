@@ -502,7 +502,7 @@ class Envelope:
         ax, ay = [lat_params[key] for key in ('alpha_x','alpha_y')]
         bx, by = [lat_params[key] for key in ('beta_x','beta_y')]
         if method == 'auto':
-            method == '4D' if unequal_eigtunes(M) else '2D'
+            method = '4D' if unequal_eigtunes(M) else '2D'
         if method == '2D':
             self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
         elif method == '4D':
@@ -609,9 +609,9 @@ class Envelope:
         self.fit_twiss4D(result.x)
         return result.cost
     
-    def match(self, lattice, solver_nodes, nturns=1, Qstep=None, tol=1e-2,
-              max_fails=1000, Qstep_max=1e-3, Qstep_min=1e-8, win_thresh=100,
-              Qstep_incr=1.5, Qstep_decr=2, display=False):
+    def match(self, lattice, solver_nodes=None, nturns=1, Qstep=None,
+              tol=1e-2, max_fails=1000, Qstep_max=1e-3, Qstep_min=1e-8,
+              win_thresh=100, Qstep_incr=1.5, Qstep_decr=2, display=False):
         """Match the envelope to the lattice by slowly ramping the intensity.
         
         This method starts by matching the beam (in the 2D sense) to the
@@ -657,7 +657,7 @@ class Envelope:
         NumPy array, shape (8,)
             The matched envelope parameters.
         """
-        if self.perveance == 0:
+        if self.perveance == 0 or solver_nodes is None:
             return self.match_barelattice(lattice)
             
         if Qstep is None:

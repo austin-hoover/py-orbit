@@ -61,9 +61,9 @@ def get_eigtunes(M):
     return np.arccos(la.eigvals(M).real)[[0, 2]]
     
 
-def unequal_eigtunes(M):
+def unequal_eigtunes(M, tol=1e-5):
     mu1, mu2 = get_eigtunes(M)
-    return mu1 != mu2
+    return abs(mu1 - mu2) > tol
 
 
 def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
@@ -152,7 +152,7 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
     def cost(kvals, correct_tunes, mass=0.93827231, energy=1):
         lattice = fodo(*kvals)
         M = transfer_matrix(lattice, mass, energy)
-        return correct_phase_adv - np.degrees(eigtunes(M)[[0, 2]])
+        return correct_phase_adv - np.degrees(get_eigtunes(M))
 
     correct_phase_adv = np.array([mux, muy])
     k0 = np.array([0.5, 0.5]) # ~ 80 deg phase advance
