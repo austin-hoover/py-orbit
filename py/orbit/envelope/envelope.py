@@ -28,8 +28,9 @@ from orbit.utils.helper_funcs import (
     initialize_bunch,
     tprint,
     transfer_matrix,
-    twiss_at_injection,
     is_stable,
+    unequal_eigtunes,
+    twiss_at_injection,
     fodo_lattice
 )
 
@@ -75,30 +76,40 @@ class Envelope:
     
     Attributes
     ----------
-    mass : float
-        The particle mass [GeV/c^2].
-    energy : float
-        The kinetic energy per particle [GeV].
     eps : float
         The rms mode emittance of the beam [m*rad].
     mode : int
         Whether to choose eps2=0 (mode 1) or eps1=0 (mode 2).
     ex_ratio : float
         The x emittance ratio, such that ex = epsx_ratio * eps
-    params : list
+    mass : float
+        The particle mass [GeV/c^2].
+    energy : float
+        The kinetic energy per particle [GeV].
+    intensity : float
+        The number of particles contained in the envelope. If 0, the particles
+        are non-interacting.
+    length : float
+        The bunch length [m]. This is used to calculate the axial charge
+        density.
+    perveance : float
+        The dimensionless beam perveance.
+    params : list (optional)
         The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
         of a particle on the beam envelope are parameterized as
             x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
             y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
         where 0 <= psi <= 2pi.
     """
-    def __init__(self, mass=1., energy=1., eps=1., mode=1,  ex_ratio=0.5,
-                 params=None):
-        self.mass = mass
-        self.energy = energy
+    def __init__(self, eps=1., mode=1, ex_ratio=0.5, mass=0.93827231,
+                 energy=1., intensity=0., length=0, params=None):
         self.eps = eps
         self.mode = mode
         self.ex_ratio, self.ey_ratio = ex_ratio, 1 - ex_ratio
+        self.mass = mass
+        self.energy = energy
+        self.length = length
+        self.set_spacecharge(intensity)
         if params is not None:
             self.params = np.array(params)
             ex, ey = self.emittances()
@@ -114,6 +125,16 @@ class Envelope:
         
     def set_params(self, a, b, ap, bp, e, f, ep, fp):
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
+        
+    def set_spacecharge(self, intensity):
+        self.intensity = intensity
+        self.charge_density = intensity / self.length
+        self.perveance = hf.get_perveance(self.mass, self.energy,
+                                          self.charge_density)
+                                          
+    def set_length(self, length):
+        self.length = length
+        self.set_spacecharge(self.intensity)
         
     def get_norm_mat_2D(self, inv=False):
         """Return the normalization matrix (2D sense)."""
@@ -454,7 +475,7 @@ class Envelope:
         tune_y %= 1
         return np.array([tune_x, tune_y])
         
-    def match_barelattice(self, lattice, method='4D', avoid_zero_eps=True):
+    def match_barelattice(self, lattice, method='auto', avoid_zero_eps=True):
         """Match to the lattice without space charge.
         
         Parameters
@@ -462,11 +483,17 @@ class Envelope:
         lattice : TEAPOT_Lattice object
             The lattice to match into (no solver nodes).
         method : str
-            The '4D' will match to the lattice using the eigenvectors of
-            the transfer matrix. If the lattice is uncoupled, the beam will end
-            up as a horizontal or vertical line. The '2D' method will only
-            match the x-x' and y-y' ellipses of the beam using the lattice
-            Twiss parameters. It will use equal x and y emittances.
+            If '4D', match to the lattice using the eigenvectors of the
+            transfer matrix. This may result in the beam being completely
+            flat, for example when the lattice is uncoupled. TO DO: add method
+            to make sure the beam never has exactly zero area in x-y space.
+            The '2D' method will only match the x-x' and y-y' ellipses of the
+            beam.
+            
+        Returns
+        -------
+        NumPy array, shape (8,)
+            The matched envelope parameters.
         """
         M = self.transfer_matrix(lattice)
         if not is_stable(M):
@@ -474,8 +501,8 @@ class Envelope:
         lat_params = hf.params_from_transfer_matrix(M)
         ax, ay = [lat_params[key] for key in ('alpha_x','alpha_y')]
         bx, by = [lat_params[key] for key in ('beta_x','beta_y')]
-        tune_x, tune_y = [lat_params[key]
-                          for key in ('frac_tune_x','frac_tune_y')]
+        if method == 'auto':
+            method == '4D' if unequal_eigtunes(M) else '2D'
         if method == '2D':
             self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
         elif method == '4D':
@@ -483,6 +510,7 @@ class Envelope:
             self.norm_transform(BL.construct_V(eigvecs))
             if avoid_zero_eps:
                 self.avoid_zero_emittance()
+        return self.params
             
     def transfer_matrix(self, lattice):
         """Compute the linear transfer matrix with space charge included.
@@ -581,10 +609,10 @@ class Envelope:
         self.fit_twiss4D(result.x)
         return result.cost
     
-    def match(self, lattice, solver_nodes, I, nturns=1, Istep=None, tol=1e-2,
-              max_fails=1000, Istep_max=1e16, Istep_min=1e10, win_thresh=100,
-              Istep_incr=1.5, Istep_decr=2, display=False):
-        """Match by slowly ramping the intensity.
+    def match(self, lattice, solver_nodes, nturns=1, Qstep=None, tol=1e-2,
+              max_fails=1000, Qstep_max=1e-3, Qstep_min=1e-8, win_thresh=100,
+              Qstep_incr=1.5, Qstep_decr=2, display=False):
+        """Match the envelope to the lattice by slowly ramping the intensity.
         
         This method starts by matching the beam (in the 2D sense) to the
         bare lattice. It then increases the intensity in steps, matching at
@@ -592,8 +620,8 @@ class Envelope:
         known match with a smaller step size. The step size is increased after
         a number of successful matches.
         
-        Generally, multiple iterations are needed when the matched beam is
-        very flat.
+        This method currently fails in some cases, such as when the matched
+        beam has near zero area.
         
         Parameters
         ----------
@@ -603,34 +631,44 @@ class Envelope:
         solver_nodes : list[EnvSolverNode]
             A list of the envelope solver nodes in the lattice. The method
             will adjust the strengths of these nodes.
-        I : float
-            The beam intensity.
         nturns : int
             The number of passes throught the lattice before the matching
             condition is enforced.
-        Istep : float
-            The intensity step size. If None, the initial step size is set
-            to the final intensity.
+        Qstep : float
+            The perveance step size. If None, the initial step size is set
+            to the final perveance.
         tol : float
             The beam is matched if the cost function is less than `tol`.
         max_fails : int
             The maximum number of failed matches.
-        Istep_max{Istep_min} : float
-            The maximum{minimum} intensity step size.
+        Qstep_max{Qstep_min} : float
+            The maximum{minimum} perveance step size.
         win_thresh : int
             After `win_thresh` successful matches are performed, the step size
             will be increased.
+        Qstep_incr : float
+            The factor by which `Qstep` is increased if `win_thresh` is
+            satisfied.
         display : bool
             Whether to print the result at each step.
-        """
-        lattice_length = lattice.getLength()
-        if Istep is None:
-            Istep = I
             
-        def __match(I):
-            Q = hf.get_perveance(self.energy, self.mass, I/lattice_length)
+        Returns
+        -------
+        NumPy array, shape (8,)
+            The matched envelope parameters.
+        """
+        if self.perveance == 0:
+            return self.match_barelattice(lattice)
+            
+        if Qstep is None:
+            Qstep = self.perveance
+            
+        def attempt_to_match(Q):
+            self.perveance = Q
             set_perveance(solver_nodes, Q)
-            if I == 0:
+            if Q == 0:
+                # Match in 2D sense so that the beam never becomes a line
+                # with zero area. This can cause problems.
                 self.match_barelattice(lattice, '2D')
                 cost = 0.
             else:
@@ -638,41 +676,42 @@ class Envelope:
             return cost
                 
         winstreak = fails = 0
-        Imax = I
-        I, last_matched_I, last_matched_params = 0., 0., self.params
+        Qfinal = self.perveance
+        Q, last_matched_Q, last_matched_params = 0., 0., self.params
         stop = False
         
         while not stop:
-            cost = __match(I)
+            cost = attempt_to_match(Q)
             converged = cost < tol
             if display:
-                tprint('I = {:.2e}, cost = {:.2e}'.format(I, cost), 4)
+                tprint('Q = {:.2e}, cost = {:.2e}'.format(Q, cost), 4)
             if converged:
                 # Store the matched params
                 last_matched_params = np.copy(self.params)
-                last_matched_I = I
+                last_matched_Q = Q
                 winstreak += 1
                 # Increase the step size if the method has worked recently
-                if winstreak > win_thresh and Istep < Istep_max:
-                    Istep *= Istep_incr
+                if winstreak > win_thresh and Qstep < Qstep_max:
+                    Qstep *= Qstep_incr
                     winstreak = 0
                     if display:
-                        tprint('Doing well. New Istep = {:.2e}'.format(Istep), 8)
+                        tprint('Doing well. New Qstep = {:.2e}'.format(Qstep), 8)
             else:
                 # Restart from last known match with a smaller step size.
                 fails, winstreak = fails + 1, 0
-                self.params, I = last_matched_params, last_matched_I
-                if Istep > Istep_min:
-                    Istep /= Istep_decr
+                self.params, Q = last_matched_params, last_matched_Q
+                if Qstep > Qstep_min:
+                    Qstep /= Qstep_decr
                 if display:
-                    tprint('Failed. New Istep = {:.2e}.'.format(Istep), 8)
+                    tprint('Failed. New Qstep = {:.2e}.'.format(Qstep), 8)
             # Check stop condition
-            stop = (converged and I == Imax) or fails > max_fails
-            I += Istep
-            if I > Imax:
-                I = Imax
+            stop = (converged and Q == Qfinal) or fails > max_fails
+            Q += Qstep
+            if Q > Qfinal:
+                Q = Qfinal
             if fails > max_fails:
                 tprint('Maximum # of failures exceeded ({})'.format(fails), 8)
+        return self.params
                                         
     def match_free(self, lattice):
         """Match by varying the envelope parameters without constraints."""
