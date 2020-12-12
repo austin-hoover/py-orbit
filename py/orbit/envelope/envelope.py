@@ -545,10 +545,8 @@ class Envelope:
         method : str
             If '4D', match to the lattice using the eigenvectors of the
             transfer matrix. This may result in the beam being completely
-            flat, for example when the lattice is uncoupled. TO DO: add method
-            to make sure the beam never has exactly zero area in x-y space.
-            The '2D' method will only match the x-x' and y-y' ellipses of the
-            beam.
+            flat, for example when the lattice is uncoupled. The '2D' method
+            will only match the x-x' and y-y' ellipses of the beam.
             
         Returns
         -------
@@ -567,7 +565,8 @@ class Envelope:
             self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
         elif method == '4D':
             eigvals, eigvecs = la.eig(M)
-            self.norm_transform(BL.construct_V(eigvecs))
+            V = BL.construct_V(eigvecs)
+            self.norm_transform(V)
         self.avoid_zero_emittance() # avoid point-like projected emittance
         self.advance_phase(1e-8 * np.pi) # avoid diagonal line with zero area
         return self.params
@@ -575,6 +574,11 @@ class Envelope:
     def match(self, lattice, nturns=1, nturns_avg=2, max_iters=2000, tol=1e-6,
               rtol=1e-8,  ptol=1e-8, verbose=0):
         """Simple 4D matching algorithm.
+        
+        The method works be tracking the beam for a number of turns, then
+        computing the average of the mismatch oscillations. The average is used
+        to generate the beam for the next iteration, and this is repeated
+        until convergence.
         
         Parameters
         ----------
@@ -602,13 +606,14 @@ class Envelope:
             Whether to diplay the optimizer progress. 0 is no
             output, 1 shows the end result, and 2 shows each iteration.
         """
-        def cost_func(p, factor=1e12):
+        def cost_func(p, factor=1e6):
             """Track and return ssq error between initial/final moments."""
             self.fit_twiss4D(p)
             Sigma0 = self.cov()
             self.track(lattice, nturns)
             Sigma1 = self.cov()
-            return factor * np.sum(covmat2vec(Sigma0 - Sigma1)**2)
+            delta = factor * covmat2vec(Sigma0 - Sigma1)
+            return 0.5 * np.sum(delta**2)
             
         def get_avg_p():
             """Return average of p over `nturns_avg` turns."""
@@ -618,9 +623,12 @@ class Envelope:
                 self.track(lattice)
                 p_tracked[i + 1] = self.twiss4D()
             return np.mean(p_tracked, axis=0)
+            
+        if self.perveance == 0:
+            return self.match_barelattice(lattice, '2D')
                     
         t_start = time.time()
-        i = 0
+        iteration = 0
         old_p = self.twiss4D()
         old_cost = np.inf
         message = 'Did not converge.'
@@ -628,45 +636,37 @@ class Envelope:
         env_params_history = [self.params]
         
         if verbose == 2:
-            print 'iters |   cost   | abs_change | rel_change | dp/norm(p)'
-            print '-------------------------------------------------------'
-            fstr = '{:<5} | {:.2e} | {:>10.2e} | {:>10.2e} | {:.2e}'
-        while i < max_iters:
-            i += 1
+            print_header()
+        while iteration < max_iters:
+            iteration += 1
             p = get_avg_p()
             cost = cost_func(p)
-            dc = cost - old_cost
-            dp = la.norm(p - old_p)
-            dc_rel = dc / cost
-            dp_rel = dp / la.norm(p)
+            cost_reduction = cost - old_cost
+            step_norm = la.norm(p - old_p)
             env_params_history.append(self.params)
             if verbose == 2:
-                print fstr.format(i, cost, dc, dc_rel, dp_rel)
+                print_iteration(iteration, cost, cost_reduction, step_norm)
             if cost < tol:
                 message = 'Converged: value of cost function is below tolerance.'
                 break
-            if abs(dc_rel) < rtol:
+            if abs(cost_reduction) < rtol * cost:
                 message = 'Converged: relative change in cost function is below tolerance.'
                 break
-            if abs(dp_rel) < ptol:
+            if abs(step_norm) < ptol * la.norm(p):
                 message = 'Converged: relative change parameter vector norm is below tolerance.'
                 break
             old_p, old_cost = p, cost
 
         runtime = time.time() - t_start
         if verbose > 0:
-            print message
-            print 'iters = {}'.format(i)
-            print 'cost = {:.2e}'.format(cost)
-        return MatchingResult(p, cost, i, runtime, message, env_params_history)
+            tprint(message, 3)
+            tprint('iters = {}'.format(iteration), 3)
+            tprint('cost = {:.4e}'.format(cost), 3)
+        return MatchingResult(p, cost, iteration, runtime, message,
+                              env_params_history)
 
     def match_lsq(self, lattice, nturns=1, verbose=0):
         """Run least squares optimizer to find the matched envelope.
-
-        This method does not always converge to the matched solution, so it
-        is recommended that the initial seed be as close as possible to the
-        matched solution. In particular, it actually struggles when space
-        charge is weak. The `match` method generally works much better.
 
         Parameters
         ----------
@@ -692,7 +692,7 @@ class Envelope:
             Sigma0 = self.cov()
             self.track(lattice)
             Sigma1 = self.cov()
-            return 1e12 * covmat2vec(Sigma1 - Sigma0)
+            return 1e6 * covmat2vec(Sigma1 - Sigma0)
 
         result = opt.least_squares(
             cost,
@@ -768,3 +768,21 @@ class MatchingResult:
         self.p, self.cost, self.iters, self.time = p, cost, iters, runtime
         self.env_params_history = np.array(env_params_history)
         self.message = message
+
+def print_header():
+    print('{0:^15}{1:^15}{2:^15}{3:^15}'
+          .format('Iteration', 'Cost', 'Cost reduction', 'Step norm'))
+
+def print_iteration(iteration, cost, cost_reduction, step_norm):
+    if cost_reduction is None:
+        cost_reduction = ' ' * 15
+    else:
+        cost_reduction = '{0:^15.2e}'.format(cost_reduction)
+
+    if step_norm is None:
+        step_norm = ' ' * 15
+    else:
+        step_norm = '{0:^15.2e}'.format(step_norm)
+
+    print('{0:^15}{1:^15.4e}{2}{3}'.format(
+        iteration, cost, cost_reduction, step_norm))
