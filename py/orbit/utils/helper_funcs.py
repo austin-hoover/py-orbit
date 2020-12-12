@@ -200,16 +200,13 @@ def fofo_lattice(ks1, ks2, L, fill_fac, fringe=False):
     
 def transfer_matrix(lattice, mass, energy):
     """Get linear transfer matrix as NumPy array."""
-    matrixGenerator = MatrixGenerator()
     bunch, params_dict = initialize_bunch(mass, energy)
-    matrixGenerator.initBunch(bunch)
-    lattice.trackBunch(bunch)
-    transfer_mat = Matrix(6, 6)
-    matrixGenerator.calculateMatrix(bunch, transfer_mat)
+    matrix_lattice = TEAPOT_MATRIX_Lattice(lattice, bunch)
+    one_turn_matrix = matrix_lattice.oneTurnMatrix
     M = np.zeros((4, 4))
     for i in range(4):
         for j in range(4):
-            M[i, j] = transfer_mat.get(i, j)
+            M[i, j] = one_turn_matrix.get(i, j)
     return M
     
 
