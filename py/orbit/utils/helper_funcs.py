@@ -26,7 +26,7 @@ from orbit_utils import Matrix
 
 #------------------------------------------------------------------------------
          
-def tprint(string, indent=0):
+def tprint(string, indent=4):
     print indent*' ' + str(string)
     
          
@@ -315,6 +315,12 @@ def add_node_throughout(lattice, new_node, position):
     }
     for node in lattice.getNodes():
         node.addChildNode(new_node, loc[position], 0, AccNode.BEFORE)
+        
+        
+def toggle_spacecharge_nodes(sc_nodes, status='off'):
+    switch = {'on':True, 'off':False}[status]
+    for sc_node in sc_nodes:
+        sc_node.switcher = switch
 
 
 def initialize_bunch(mass, energy):

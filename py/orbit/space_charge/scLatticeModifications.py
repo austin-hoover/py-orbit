@@ -59,4 +59,3 @@ def setSC_General_AccNodes(lattice, sc_path_length_min, space_charge_calculator,
 	scNodes_arr.append(scNode)
 	accNode.addChildNode(scNode,AccNode.BODY,part_index,AccNode.BEFORE)
 	return scNodes_arr
-

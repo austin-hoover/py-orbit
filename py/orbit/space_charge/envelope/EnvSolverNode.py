@@ -10,8 +10,8 @@ class EnvSolverNode(SC_Base_AccNode):
         self.setType('envsolver')
         self.sc_calculator = sc_calculator
 
-    def track(self, paramsDict):
+    def track(self, params_dict):
         if not self.switcher:
             return
-        bunch = paramsDict['bunch']
+        bunch = params_dict['bunch']
         self.sc_calculator.trackBunch(bunch, self.sc_length)

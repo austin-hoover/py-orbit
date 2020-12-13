@@ -4,7 +4,7 @@ the Danilov distribution.
 
 To do
 -----
-* For `match_barelattice` method, automatically figure out if the lattice is
+* For `match_bare` method, automatically figure out if the lattice is
   coupled or has unequal phase advances from its transfer matrix. If it does
   not, then just match in the 2D sense. Otherwise, match in the 4D sense.
 """
@@ -29,7 +29,6 @@ from orbit.utils import helper_funcs as hf
 from orbit.utils.helper_funcs import (
     initialize_bunch,
     tprint,
-    transfer_matrix,
     is_stable,
     unequal_eigtunes,
     twiss_at_injection,
@@ -66,7 +65,7 @@ def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
     return V
 
 # Define bounds on 4D twiss parameters
-pad = 1e-3
+pad = 1e-4
 alpha_min, alpha_max = -np.inf, np.inf
 beta_min, beta_max = pad, np.inf
 nu_min, nu_max = pad, np.pi - pad
@@ -102,7 +101,7 @@ class Envelope:
         density.
     perveance : float
         The dimensionless beam perveance.
-    params : list (optional)
+    params : list, optional
         The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
         of a particle on the beam envelope are parameterized as
             x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
@@ -150,7 +149,7 @@ class Envelope:
         
     def get_norm_mat_2D(self, inv=False):
         """Return the normalization matrix V (2D sense)."""
-        ax, ay, bx, by, _, _ = self.twiss2D()
+        ax, ay, bx, by = self.twiss2D()
         V = norm_mat(ax, bx, ay, by)
         if inv:
             return la.inv(V)
@@ -244,34 +243,33 @@ class Envelope:
     def emittances(self, mm_mrad=False):
         """Return the horizontal/vertical rms emittance."""
         Sigma = self.cov()
-        S = self.cov()
-        ex = np.sqrt(la.det(S[:2, :2]))
-        ey = np.sqrt(la.det(S[2:, 2:]))
+        ex = np.sqrt(la.det(Sigma[:2, :2]))
+        ey = np.sqrt(la.det(Sigma[2:, 2:]))
         emittances = np.array([ex, ey])
         if mm_mrad:
             emittances *= 1e6
-        return emittances
+        return  emittances
         
     def twiss2D(self):
         """Return the horizontal/vertical Twiss parameters and emittances."""
-        S = self.cov()
-        ex = np.sqrt(la.det(S[:2, :2]))
-        ey = np.sqrt(la.det(S[2:, 2:]))
-        bx = S[0, 0] / ex
-        by = S[2, 2] / ey
-        ax = -S[0, 1] / ex
-        ay = -S[2, 3] / ey
-        return np.array([ax, ay, bx, by, ex, ey])
+        Sigma = self.cov()
+        ex = np.sqrt(la.det(Sigma[:2, :2]))
+        ey = np.sqrt(la.det(Sigma[2:, 2:]))
+        bx = Sigma[0, 0] / ex
+        by = Sigma[2, 2] / ey
+        ax = -Sigma[0, 1] / ex
+        ay = -Sigma[2, 3] / ey
+        return np.array([ax, ay, bx, by])
         
     def twiss4D(self):
         """Return the 4D Twiss parameters, as defined by Bogacz & Lebedev."""
-        S = self.cov()
-        ex = np.sqrt(la.det(S[:2, :2]))
-        ey = np.sqrt(la.det(S[2:, 2:]))
-        bx = S[0, 0] / self.eps
-        by = S[2, 2] / self.eps
-        ax = -S[0, 1] / self.eps
-        ay = -S[2, 3] / self.eps
+        Sigma = self.cov()
+        ex = np.sqrt(la.det(Sigma[:2, :2]))
+        ey = np.sqrt(la.det(Sigma[2:, 2:]))
+        bx = Sigma[0, 0] / self.eps
+        by = Sigma[2, 2] / self.eps
+        ax = -Sigma[0, 1] / self.eps
+        ay = -Sigma[2, 3] / self.eps
         nu = self.phase_diff()
         if self.mode == 1:
             u = ey / self.eps
@@ -291,13 +289,11 @@ class Envelope:
         e, f = self.get_params_for_dim(x2)
         phi = self.tilt_angle(x1, x2)
         cos, sin = np.cos(phi), np.sin(phi)
-        cos2, sin2 = cos**2, sin**2
+        cos2, sin2, sincos = cos**2, sin**2, sin*cos
         x2, y2 = a**2 + b**2, e**2 + f**2
-        area = abs(a*f - b*e)
-        cx = np.sqrt(
-            area**2 / (y2*cos2 + x2*sin2 +  2*(a*e + b*f)*cos*sin))
-        cy = np.sqrt(
-            area**2 / (x2*cos2 + y2*sin2 -  2*(a*e + b*f)*cos*sin))
+        A = abs(a*f - b*e)
+        cx = np.sqrt(A**2 / (y2*cos2 + x2*sin2 + 2*(a*e + b*f)*sincos))
+        cy = np.sqrt(A**2 / (x2*cos2 + y2*sin2 - 2*(a*e + b*f)*sincos))
         return np.array([cx, cy])
         
     def area(self, x1='x', x2='y'):
@@ -307,7 +303,7 @@ class Envelope:
         return np.pi * np.abs(a*f - b*e)
         
     def phases(self):
-        """Return the horizontal/vertical phases (in range [0, 2pi] of a
+        """Return the horizontal/vertical phases in range [0, 2*pi] of a
          particle with x=a, x'=a', y=e, y'=e'."""
         a, b, ap, bp, e, f, ep, fp = self.normed_params_2D()
         mux, muy = -np.arctan2(ap, a), -np.arctan2(ep, e)
@@ -319,49 +315,44 @@ class Envelope:
         
     def phase_diff(self):
         """Return the x-y phase difference (nu) of all particles in the beam.
-        The value returned is in the range [0, pi].
+        
+        The value returned is in the range [0, pi]. This can also be found from
+        the equation cos(nu) = r, where r is the x-y correlation coefficient.
         """
         mux, muy = self.phases()
         nu = abs(muy - mux)
         return nu if nu < np.pi else 2*np.pi - nu
-                
-    def set_twiss_param_4D(self, name, value):
-        """Change a single Twiss parameter while keeping the others fixed."""
-        ax, ay, bx, by, u, nu = self.twiss4D()
-        D = {'ax':ax, 'ay':ay, 'bx':bx, 'by':by, 'u':u, 'nu':nu}
-        D[name] = value
-        # The list is created in this way because, for some reason, the items
-        # are not in the same order as above (ax, ay, ...).
-        self.fit_twiss4D(
-            [D[key] for key in ('ax', 'ay', 'bx', 'by', 'u', 'nu')])
         
     def fit_twiss2D(self, ax, ay, bx, by, ex_ratio):
         """Fit the envelope to the 2D Twiss parameters."""
-        self.norm2D(scale=True)
         V = norm_mat(ax, bx, ay, by)
         ex, ey = ex_ratio * self.eps, (1 - ex_ratio) * self.eps
         A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
+        self.norm2D(scale=True)
         self.transform(np.matmul(V, A))
         
     def fit_twiss4D(self, twiss_params):
-        """Fit the envelope to the BL Twiss parameters.
+        """Fit the envelope to the 4D Twiss parameters.
         
-        twiss_params : array of floats
-            Container for the 4D Twiss params for a single mode: [ax, ay, bx,
-            by, u, nu], where
-            ax{y} : float
-                The horizontal{vertical} alpha function -<xx'>/e1 {-<xx'>/e2}.
-            bx{y} : float
-                The horizontal{vertical} beta function <xx>/e1 {<xx>/e2}.
-            u : float
-                The coupling parameter in range [0, 1]. This is equal to ey/e1
-                when mode=1 or ex/e2 when mode=2.
-            nu : float
-                The x-y phase difference in range [0, pi].
+        `twiss_params` is an array containing the 4D Twiss params for a single
+        mode: [ax, ay, bx, by, u, nu], where
+        * ax{y} : The horizontal{vertical} alpha function -<xx'>/e1 {-<xx'>/e2}.
+        * bx{y} : The horizontal{vertical} beta function <xx>/e1 {<xx>/e2}.
+        * u : The coupling parameter in range [0, 1]. This is equal to ey/e1
+              when mode=1 or ex/e2 when mode=2.
+        * nu : The x-y phase difference in range [0, pi].
         """
         ax, ay, bx, by, u, nu = twiss_params
         V = BL.Vmat(ax, ay, bx, by, u, nu, self.mode)
         self.norm_transform(V)
+        
+    def set_twiss_param_4D(self, name, value):
+        """Change a single Twiss parameter while keeping the others fixed."""
+        ax, ay, bx, by, u, nu = self.twiss4D()
+        twiss_dict = {'ax':ax, 'ay':ay, 'bx':bx, 'by':by, 'u':u, 'nu':nu}
+        twiss_dict[name] = value
+        self.fit_twiss4D([twiss_dict[key]
+                          for key in ('ax', 'ay', 'bx', 'by', 'u', 'nu')])
         
     def fit_cov(self, Sigma, verbose=0):
         """Fit the envelope to the covariance matrix Sigma."""
@@ -369,7 +360,7 @@ class Envelope:
             self.params = params
             return 1e12 * covmat2vec(Sigma - self.cov())
         result = opt.least_squares(mismatch, self.params, args=(Sigma,),
-                                   xtol=1e-12)
+                                   xtol=1e-12, verbose=verbose)
         return result.x
         
     def get_part_coords(self, psi=0):
@@ -385,14 +376,7 @@ class Envelope:
     def generate_dist(self, nparts, density='uniform'):
         """Generate a distribution of particles from the envelope.
 
-        Parameters
-        ----------
-        nparts : int
-            The number of particles in the bunch.
-
-        Returns
-        -------
-        X : NumPy array, shape (nparts, 4)
+        Returns: NumPy array, shape (nparts, 4)
             The coordinate array for the distribution.
         """
         nparts = int(nparts)
@@ -405,20 +389,6 @@ class Envelope:
         elif density == 'gaussian':
             radii = np.random.normal(size=nparts)
         return radii[:, np.newaxis] * X
-        
-    def avoid_zero_emittance(self):
-        """If <x2> and <xp2> are both zero, make them slightly nonzero.
-        
-        This will occur for a matched beam in an uncoupled lattice with
-        unequal tunes.
-        """
-        a, b, ap, bp, e, f, ep, fp = self.params
-        tol = 1e-8
-        if np.all(np.abs(self.params[:4]) < tol):
-            a = bp = tol
-        if np.all(np.abs(self.params[4:]) < tol):
-            f = ep = tol
-        self.set_params(a, b, ap, bp, e, f, ep, fp)
             
     def from_bunch(self, bunch):
         """Extract the envelope parameters from a Bunch object."""
@@ -456,11 +426,11 @@ class Envelope:
             bunch.addParticle(a, ap, e, ep, 0., 0.)
             bunch.addParticle(b, bp, f, fp, 0., 0.)
         for (x, xp, y, yp) in self.generate_dist(nparts):
-            z = np.random.random() * length
+            z = np.random.uniform(0, length)
             bunch.addParticle(x, xp, y, yp, z, 0.)
         return bunch, params_dict
         
-    def track(self, lattice, nturns=1, ntestparts=0):
+    def track(self, lattice, nturns=1, ntestparts=0, progbar=False):
         """Track the envelope through the lattice.
         
         The envelope parameters are updated after it is tracked. If
@@ -468,7 +438,8 @@ class Envelope:
         linear space charge kicks based on the envelope parmaeters.
         """
         bunch, params_dict = self.to_bunch(ntestparts, lattice.getLength())
-        for _ in range(nturns):
+        turns = trange(nturns) if progbar else range(nturns)
+        for _ in turns:
             lattice.trackBunch(bunch, params_dict)
         self.from_bunch(bunch)
         
@@ -506,11 +477,10 @@ class Envelope:
         if self.perveance == 0:
             return hf.transfer_matrix(lattice, self.mass, self.energy)
             
-        bunch, params_dict = self.to_bunch()
-        
         step_arr_init = np.full(6, 1e-6)
         step_arr = np.copy(step_arr_init)
         step_reduce = 20.
+        bunch, params_dict = self.to_bunch()
         bunch.addParticle(0., 0., 0., 0., 0., 0.);
         bunch.addParticle(step_arr[0]/step_reduce, 0., 0., 0., 0., 0.)
         bunch.addParticle(0., step_arr[1]/step_reduce, 0., 0., 0., 0.)
@@ -535,7 +505,7 @@ class Envelope:
                 M[j, i] = ((y1-y0)*x2*x2 - (y2-y0)*x1*x1) / (x1*x2*(x2-x1))
         return M
         
-    def match_barelattice(self, lattice, method='auto'):
+    def match_bare(self, lattice, method='auto', sc_nodes=None):
         """Match to the lattice without space charge.
         
         Parameters
@@ -547,32 +517,107 @@ class Envelope:
             transfer matrix. This may result in the beam being completely
             flat, for example when the lattice is uncoupled. The '2D' method
             will only match the x-x' and y-y' ellipses of the beam.
+        sc_nodes : list, optional
+            List of nodes which are sublasses of SC_Base_AccNode. If provided,
+            call `node.switcher = False` to prevent the node from tracking.
             
         Returns
         -------
         NumPy array, shape (8,)
             The matched envelope parameters.
         """
+        if sc_nodes is not None:
+            hf.toggle_spacecharge_nodes(sc_nodes, 'off')
+            
+        # Get linear transfer matrix
         M = self.transfer_matrix(lattice)
         if not is_stable(M):
             print 'WARNING: transfer matrix is not stable.'
-        lat_params = hf.params_from_transfer_matrix(M)
-        ax, ay = [lat_params[key] for key in ('alpha_x','alpha_y')]
-        bx, by = [lat_params[key] for key in ('beta_x','beta_y')]
+        # Match to the lattice
         if method == 'auto':
             method = '4D' if unequal_eigtunes(M) else '2D'
         if method == '2D':
+            lattice_params = hf.params_from_transfer_matrix(M)
+            ax, ay = [lattice_params[key] for key in ('alpha_x', 'alpha_y')]
+            bx, by = [lattice_params[key] for key in ('beta_x', 'beta_y')]
             self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
         elif method == '4D':
             eigvals, eigvecs = la.eig(M)
             V = BL.construct_V(eigvecs)
             self.norm_transform(V)
-        self.avoid_zero_emittance() # avoid point-like projected emittance
-        self.advance_phase(1e-8 * np.pi) # avoid diagonal line with zero area
+        # If rms beam size and divergence are zero in either plane, make
+        # them slightly nonzero. This will occur when the lattice is uncoupled
+        # and has unequal x/y tunes.
+        a, b, ap, bp, e, f, ep, fp = self.params
+        pad = 1e-8
+        if np.all(np.abs(self.params[:4]) < pad):
+            a = bp = pad
+        if np.all(np.abs(self.params[4:]) < pad):
+            f = ep = pad
+        self.set_params(a, b, ap, bp, e, f, ep, fp)
+        # Avoid diagonal line in x-y space. This may occur for coupled lattice.
+        self.advance_phase(1e-8 * np.pi)
+        
+        if sc_nodes is not None:
+            hf.toggle_spacecharge_nodes(sc_nodes, 'on')
         return self.params
+        
+    def match(self, lattice, solver_nodes, nturns=1, tol=1e-4, verbose=0):
+        """Match the envelope to the lattice.
+        
+        Calls `the least squares optimizer`, then calls the 'replace by avg'
+        method if least squares did not exactly converge.
+        """
+        if self.perveance == 0:
+            return self.match_bare(lattice, solver_nodes)
+            
+        def initialize():
+            self.set_twiss_param_4D('u', 0.5)
+            self.set_twiss_param_4D('nu', np.pi/2)
+            self.match_bare(lattice, '2D', solver_nodes)
+            
+        initialize()
+        result = self._match_lsq(lattice, verbose=verbose)
+        if result.cost > tol:
+            print "Cost = {:.2e} > tol.".format(result.cost)
+            print "Trying 'replace by average' method."
+            initialize()
+            result = self._match_replace_by_avg(lattice, verbose=verbose)
+        return result
+        
+    def _match_lsq(self, lattice, **kwargs):
+        """Run least squares optimizer to find the matched envelope.
 
-    def match(self, lattice, nturns=1, nturns_avg=2, max_iters=2000, tol=1e-6,
-              rtol=1e-8,  ptol=1e-8, verbose=0):
+        Parameters
+        ----------
+        lattice : TEAPOT_Lattice object
+            The lattice to match into. The solver nodes should already be in
+            place.
+        **kwargs
+            Keyword arguments to be passed to `scipy.optimize.least_squares`
+            method.
+
+        Returns
+        -------
+        result : scipy.optimize.OptimizeResult object
+            See the documentation for the description. The two important
+            fields are `x`: the final parameter vector, and `cost`: the final
+            cost function.
+        """
+        def cost_func(twiss_params, nturns=1):
+            self.fit_twiss4D(twiss_params)
+            Sigma0 = self.cov()
+            self.track(lattice)
+            Sigma1 = self.cov()
+            return 1e6 * covmat2vec(Sigma1 - Sigma0)
+            
+        result = opt.least_squares(cost_func, self.twiss4D(), bounds=bounds,
+                                   **kwargs)
+        self.fit_twiss4D(result.x)
+        return result
+
+    def _match_replace_by_avg(self, lattice, nturns_avg=15, max_iters=2000,
+                              tol=1e-6, ftol=1e-8, xtol=1e-8, verbose=0):
         """Simple 4D matching algorithm.
         
         The method works be tracking the beam for a number of turns, then
@@ -586,126 +631,88 @@ class Envelope:
             The lattice to match into. The solver nodes should already be in
             place.
         nturns : int
-            The number of turns after which to enforce the matching condition.
+            Number of turns after which to enforce the matching condition.
         nturns_avg : int
-            The number of turns to average over when updating the parameter
-            vector.
+            Number of turns to average over when updating the parameter vector.
         max_iters : int
-            The maximum number of iterations to perform.
+            Maximum number of iterations to perform.
         tol : float
-            The tolerance for the value of the cost function C = 1e12 *
+            Tolerance for the value of the cost function C = 1e12 *
             |sigma1 - sigma0|**2, where sigma0 and sigma1 are the initial and
             final moment vectors, respectively.
-        rtol : float
-            The tolerance for the absolute value of the relative change in
-            the cost function.
-        ptol : float
-            The tolerance for the relative change in the norm of the parameter
-            vector.
-        verbose : int
-            Whether to diplay the optimizer progress. 0 is no
-            output, 1 shows the end result, and 2 shows each iteration.
+        ftol : float
+            Tolerance for termination by the change of the cost function.
+        xtol : float
+            Tolerance for termination by the change of the parameter vector
+            norm.
+        verbose : {0, 1, 2}, optional
+            Level of algorithm's verbosity:
+                * 0 (default) : work silently.
+                * 1 : display a termination report.
+                * 2 : display progress during iterations
         """
-        def cost_func(p, factor=1e6):
-            """Track and return ssq error between initial/final moments."""
-            self.fit_twiss4D(p)
-            Sigma0 = self.cov()
-            self.track(lattice, nturns)
-            Sigma1 = self.cov()
-            delta = factor * covmat2vec(Sigma0 - Sigma1)
-            return 0.5 * np.sum(delta**2)
-            
-        def get_avg_p():
-            """Return average of p over `nturns_avg` turns."""
-            p_tracked = np.zeros((nturns_avg + 1, 6))
-            p_tracked[0] = self.twiss4D()
-            for i in range(nturns_avg):
-                self.track(lattice)
-                p_tracked[i + 1] = self.twiss4D()
-            return np.mean(p_tracked, axis=0)
-            
-        if self.perveance == 0:
-            return self.match_barelattice(lattice, '2D')
-                    
-        t_start = time.time()
-        iteration = 0
-        old_p = self.twiss4D()
-        old_cost = np.inf
-        message = 'Did not converge.'
-        message_fstr = 'Converged: {} is below tolerance'
-        env_params_history = [self.params]
-        
-        if verbose == 2:
-            print_header()
-        while iteration < max_iters:
-            iteration += 1
-            p = get_avg_p()
-            cost = cost_func(p)
-            cost_reduction = cost - old_cost
-            step_norm = la.norm(p - old_p)
-            env_params_history.append(self.params)
-            if verbose == 2:
-                print_iteration(iteration, cost, cost_reduction, step_norm)
-            if cost < tol:
-                message = 'Converged: value of cost function is below tolerance.'
-                break
-            if abs(cost_reduction) < rtol * cost:
-                message = 'Converged: relative change in cost function is below tolerance.'
-                break
-            if abs(step_norm) < ptol * la.norm(p):
-                message = 'Converged: relative change parameter vector norm is below tolerance.'
-                break
-            old_p, old_cost = p, cost
-
-        runtime = time.time() - t_start
-        if verbose > 0:
-            tprint(message, 3)
-            tprint('iters = {}'.format(iteration), 3)
-            tprint('cost = {:.4e}'.format(cost), 3)
-        return MatchingResult(p, cost, iteration, runtime, message,
-                              env_params_history)
-
-    def match_lsq(self, lattice, nturns=1, verbose=0):
-        """Run least squares optimizer to find the matched envelope.
-
-        Parameters
-        ----------
-        lattice : TEAPOT_Lattice object
-            The lattice to match into. The solver nodes should already be
-            in place.
-        nturns : int
-            The number of passes throught the lattice before the matching
-            condition is enforced.
-        verbose : int
-            Whether to diplay the optimizer progress (0, 1, or 2). 0 is no
-            output, 1 shows the end result, and 2 shows each iteration.
-
-        Returns
-        -------
-        result : scipy.optimize.OptimizeResult object
-            See the documentation for the description. The two important
-            fields are `x`: the final parameter vector, and `cost`: the final
-            cost function.
-        """
-        def cost(twiss_params, nturns=1):
+        def cost_func(twiss_params, factor=1e6):
+            # To do: make this return the same as in scipy least_squares
             self.fit_twiss4D(twiss_params)
             Sigma0 = self.cov()
             self.track(lattice)
             Sigma1 = self.cov()
-            return 1e6 * covmat2vec(Sigma1 - Sigma0)
+            delta = factor * covmat2vec(Sigma1 - Sigma0)
+            return 0.5 * np.sum(delta**2)
+            
+        def get_avg_twiss_params():
+            twiss_params_tracked = []
+            for _ in range(nturns_avg + 1):
+                twiss_params_tracked.append(self.twiss4D())
+                self.track(lattice)
+            return np.mean(twiss_params_tracked, axis=0)
+            
+        def is_converged(cost, cost_reduction, step_norm, twiss_params):
+            converged, message = False, 'Did not converge.'
+            if cost < tol:
+                converged == True
+                msg = '`tol` termination condition is satisfied.'
+            if abs(cost_reduction) < ftol * cost:
+                converged = True
+                msg = '`ftol` termination condition is satisfied.'
+            if abs(step_norm) < xtol * (xtol + la.norm(twiss_params)):
+                converged = True
+                message = '`xtol` termination condition is satisfied.'
+            return converged, message
+                
+        if self.perveance == 0:
+            return self.match_bare(lattice, '2D')
+                    
+        iteration = 0
+        old_twiss_params, old_cost = self.twiss4D(), +np.inf
+        env_params_history = [self.params]
+        converged, message = False, 'Did not converge.'
+        
+        t_start = time.time()
+        if verbose == 2:
+            print_header()
+        while not converged and iteration < max_iters:
+            iteration += 1
+            twiss_params = get_avg_twiss_params()
+            cost = cost_func(twiss_params)
+            cost_reduction = cost - old_cost
+            step_norm = la.norm(twiss_params - old_twiss_params)
+            env_params_history.append(self.params)
+            converged, message = is_converged(cost, cost_reduction, step_norm,
+                                              twiss_params)
+            old_twiss_params, old_cost = twiss_params, cost
+            if verbose == 2:
+                print_iteration(iteration, cost, cost_reduction, step_norm)
+        t_end = time.time()
+        
+        if verbose > 0:
+            tprint(message, 3)
+            tprint('cost = {:.4e}'.format(cost), 3)
+            tprint('iters = {}'.format(iteration), 3)
+        return MatchingResult(twiss_params, cost, iteration, t_end-t_start,
+                              message, env_params_history)
 
-        result = opt.least_squares(
-            cost,
-            self.twiss4D(),
-            args=(nturns,),
-            bounds=bounds,
-            verbose=verbose,
-            xtol=1e-12
-        )
-        self.fit_twiss4D(result.x)
-        return result.cost
-
-    def match_free(self, lattice):
+    def _match_free(self, lattice):
         """Match by varying the envelope parameters without constraints. The
         mode emittance of the beam will not be conserved.
         """
@@ -714,8 +721,8 @@ class Envelope:
             Sigma0 = self.cov()
             self.track(lattice)
             Sigma1 = self.cov()
-            return 1e12 * covmat2vec(Sigma1 - Sigma0)
-
+            return 1e6* covmat2vec(Sigma1 - Sigma0)
+            
         result = opt.least_squares(cost, self.params, verbose=2, xtol=1e-12)
         return result.cost
 
@@ -750,18 +757,24 @@ class Envelope:
         twiss_params = (ax, ay, bx, by, u, nu)
         self.fit_twiss4D(twiss_params)
         
-    def print_twiss2D(self, short=False, indent=4):
-        """Print the 2D Twiss parameters."""
-        ax, ay, bx, by, ex, ey = self.twiss2D()
-        ex, ey = 1e6 * np.array([ex, ey])
-        if short:
-            tprint('twiss_params = {}'.format(
-                np.round([ax, ay, bx, by, ex, ey], 2)), indent)
-        else:
-            print 'Envelope Twiss parameters:'
-            tprint('ax, ay = {:.2f}, {:.2f} rad'.format(ax, ay), indent)
-            tprint('bx, by = {:.2f}, {:.2f} m'.format(bx, by), indent)
-            tprint('ex, ey = {:.2e}, {:.2e} mm*mrad'.format(ex, ey), indent)
+    def print_twiss2D(self, indent=4):
+        (ax, ay, bx, by), (ex, ey) = self.twiss2D(), self.emittances()
+        print '2D Twiss parameters:'
+        tprint('ax, ay = {:.3f}, {:.3f} [rad]'.format(ax, ay))
+        tprint('bx, by = {:.3f}, {:.3f} [m]'.format(bx, by))
+        tprint('ex, ey = {:.3e}, {:.3e} [m*rad]'.format(ex, ey))
+    
+    def print_twiss4D(self):
+        ax, ay, bx, by, u, nu = self.twiss4D()
+        print '4D Twiss parameters:'
+        tprint('mode = {}'.format(self.mode))
+        tprint('e{} = {:.3e} [m*rad]'.format(self.mode, self.eps))
+        tprint('ax, ay = {:.3f}, {:.3f} [rad]'.format(ax, ay))
+        tprint('bx, by = {:.3f}, {:.3f} [m]'.format(bx, by))
+        tprint('u = {:.3f}'.format(u))
+        tprint('nu = {:.3f} [deg]'.format(u))
+            
+            
             
 class MatchingResult:
     def __init__(self, p, cost, iters, runtime, message, env_params_history):
@@ -770,19 +783,19 @@ class MatchingResult:
         self.message = message
 
 def print_header():
-    print('{0:^15}{1:^15}{2:^15}{3:^15}'
-          .format('Iteration', 'Cost', 'Cost reduction', 'Step norm'))
+    print '{0:^15}{1:^15}{2:^15}{3:^15}'.format(
+        'Iteration', 'Cost', 'Cost reduction', 'Step norm')
 
 def print_iteration(iteration, cost, cost_reduction, step_norm):
     if cost_reduction is None:
         cost_reduction = ' ' * 15
     else:
-        cost_reduction = '{0:^15.2e}'.format(cost_reduction)
+        cost_reduction = '{0:^15.3e}'.format(cost_reduction)
 
     if step_norm is None:
         step_norm = ' ' * 15
     else:
         step_norm = '{0:^15.2e}'.format(step_norm)
 
-    print('{0:^15}{1:^15.4e}{2}{3}'.format(
-        iteration, cost, cost_reduction, step_norm))
+    print '{0:^15}{1:^15.4e}{2}{3}'.format(
+        iteration, cost, cost_reduction, step_norm)
