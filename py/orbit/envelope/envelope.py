@@ -45,15 +45,14 @@ def phase_adv_matrix(phi1, phi2):
     R[:2, :2] = rotation_matrix(phi1)
     R[2:, 2:] = rotation_matrix(phi2)
     return R
-    
-def norm_mat_2D(alpha, beta):
-    return np.array([[beta, 0], [-alpha, 1]]) / np.sqrt(beta)
 
-def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
+def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
     """4D normalization matrix (uncoupled)"""
+    def V_uu(alpha, beta):
+        return np.array([[beta, 0], [-alpha, 1]]) / np.sqrt(beta)
     V = np.zeros((4, 4))
-    V[:2, :2] = norm_mat_2D(alpha_x, beta_x)
-    V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
+    V[:2, :2] = V_uu(alpha_x, beta_x)
+    V[2:, 2:] = V_uu(alpha_y, beta_y)
     return V
 
 # Define bounds on the 4D Twiss parameters
@@ -165,7 +164,7 @@ class Envelope:
     def get_norm_mat_2D(self, inv=False):
         """Return the normalization matrix V (2D sense)."""
         ax, ay, bx, by = self.twiss2D()
-        V = norm_mat(ax, bx, ay, by)
+        V = Vmat_2D(ax, bx, ay, by)
         return la.inv(V) if inv else V
         
     def norm4D(self):
@@ -324,7 +323,7 @@ class Envelope:
         
     def fit_twiss2D(self, ax, ay, bx, by, ex_ratio):
         """Fit the envelope to the 2D Twiss parameters."""
-        V = norm_mat(ax, bx, ay, by)
+        V = Vmat_2D(ax, bx, ay, by)
         ex, ey = ex_ratio * self.eps, (1 - ex_ratio) * self.eps
         A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
         self.norm2D(scale=True)
