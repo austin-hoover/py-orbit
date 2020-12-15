@@ -1,9 +1,9 @@
 """
 Module for inserting analysis nodes into the lattice.
 """
+
 # 3rd party
 import numpy as np
-
 # PyORBIT
 from orbit.lattice import (
     AccLattice,

@@ -1,50 +1,44 @@
 """
 This module contains functions related to the envelope parameterization of
-the Danilov distribution.
+the {2, 2} Danilov distribution.
 
-To do
------
-* For `match_bare` method, automatically figure out if the lattice is
-  coupled or has unequal phase advances from its transfer matrix. If it does
-  not, then just match in the 2D sense. Otherwise, match in the 4D sense.
+Reference: https://journals.aps.org/prab/pdf/10.1103/PhysRevSTAB.6.094202
 """
+
+# Imports
+#------------------------------------------------------------------------------
 # Python
 import time
-
 # 3rd party
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
-from tqdm import trange, tqdm
-
+from tqdm import trange
 # PyORBIT
 from bunch import Bunch
 from orbit.analysis.analysis import covmat2vec
 from orbit.coupling import bogacz_lebedev as BL
-from orbit.space_charge.envelope import (
-    set_env_solver_nodes,
-    set_perveance
-)
+from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.utils import helper_funcs as hf
 from orbit.utils.helper_funcs import (
     initialize_bunch,
     tprint,
     is_stable,
     unequal_eigtunes,
-    twiss_at_injection,
-    fodo_lattice
+    get_perveance,
+    params_from_transfer_matrix,
+    toggle_spacecharge_nodes
 )
     
-
+# Helper functions
+#------------------------------------------------------------------------------
 def rotation_matrix(phi):
     C, S = np.cos(phi), np.sin(phi)
     return np.array([[C, S], [-S, C]])
     
-    
 def rotation_matrix_4D(phi):
     C, S = np.cos(phi), np.sin(phi)
     return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
-    
     
 def phase_adv_matrix(phi1, phi2):
     R = np.zeros((4, 4))
@@ -52,10 +46,8 @@ def phase_adv_matrix(phi1, phi2):
     R[2:, 2:] = rotation_matrix(phi2)
     return R
     
-    
 def norm_mat_2D(alpha, beta):
     return np.array([[beta, 0], [-alpha, 1]]) / np.sqrt(beta)
-
 
 def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
     """4D normalization matrix (uncoupled)"""
@@ -64,7 +56,7 @@ def norm_mat(alpha_x, beta_x, alpha_y, beta_y):
     V[2:, 2:] = norm_mat_2D(alpha_y, beta_y)
     return V
 
-# Define bounds on 4D twiss parameters
+# Define bounds on the 4D Twiss parameters
 pad = 1e-4
 alpha_min, alpha_max = -np.inf, np.inf
 beta_min, beta_max = pad, np.inf
@@ -72,8 +64,11 @@ nu_min, nu_max = pad, np.pi - pad
 u_min, u_max = pad, 1 - pad
 lb = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
 ub = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
-bounds = (lb, ub)
+twiss_bounds = (lb, ub)
 
+
+# Class definitions
+#------------------------------------------------------------------------------
 
 class Envelope:
     """Class for the Danilov distribution envelope.
@@ -84,7 +79,7 @@ class Envelope:
     Attributes
     ----------
     eps : float
-        The rms mode emittance of the beam [m*rad].
+        The rms intrinsic emittance of the beam [m*rad].
     mode : int
         Whether to choose eps2=0 (mode 1) or eps1=0 (mode 2).
     ex_ratio : float
@@ -129,38 +124,55 @@ class Envelope:
                 self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
             elif mode == 2:
                 self.params = np.array([rx, 0, 0, rx, 0, +ry, -ry, 0])
+        self.twiss_bounds = twiss_bounds
         
     def set_params(self, a, b, ap, bp, e, f, ep, fp):
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         
     def get_params_for_dim(self, dim='x'):
+        """Return envelope parameters associated with the given dimension."""
         a, b, ap, bp, e, f, ep, fp = self.params
         return {'x':(a, b), 'y':(e, f), 'xp':(ap, bp), 'yp': (ep, fp)}[dim]
         
     def set_spacecharge(self, intensity):
+        """Set the beam perveance."""
         self.intensity = intensity
         self.charge_density = intensity / self.length
-        self.perveance = hf.get_perveance(self.mass, self.energy,
-                                          self.charge_density)
+        self.perveance = get_perveance(self.mass, self.energy,
+                                       self.charge_density)
                                           
     def set_length(self, length):
+        """Set the axial beam length. This will change the beam perveance."""
         self.length = length
         self.set_spacecharge(self.intensity)
+        
+    def matrix(self):
+        """Create the envelope matrix P from the envelope parameters.
+        
+        The matrix is defined by x = P.c, where x = [x, x', y, y']^T,
+        c = [cos(psi), sin(psi)], and '.' means matrix multiplication, with
+        0 <= psi <= 2pi. This is useful because any transformation to the
+        particle coordinate vector x also done to P. For example, if x -> M.x,
+        then P -> M.P.
+        """
+        a, b, ap, bp, e, f, ep, fp = self.params
+        return np.array([[a, b], [ap, bp], [e, f], [ep, fp]])
+        
+    def to_vec(self, P):
+        """Convert the envelope matrix to vector form."""
+        return P.ravel()
         
     def get_norm_mat_2D(self, inv=False):
         """Return the normalization matrix V (2D sense)."""
         ax, ay, bx, by = self.twiss2D()
         V = norm_mat(ax, bx, ay, by)
-        if inv:
-            return la.inv(V)
-        else:
-            return V
+        return la.inv(V) if inv else V
         
-    def norm(self):
-        """Transform the envelope to normalized coordinates.
+    def norm4D(self):
+        """Normalize the envelope parameters in the 4D sense.
         
         In the transformed coordates the covariance matrix is diagonal, and the
-        x-x' and y-y' emittances are the mode emittances.
+        x-x' and y-y' emittances are the intrinsic emittances.
         """
         r_n = np.sqrt(4 * self.eps)
         if self.mode == 1:
@@ -173,9 +185,10 @@ class Envelope:
         parameters.
         
         Here 'normalized' means the x-x' and y-y' ellipses will be circles of
-        radius sqrt(ex) and sqrt(ey). The cross-plane elements of the
-        covariance matrix will not all be zero. If `scale` is True, the x-x'
-        and y-y' ellipses will be scaled to unit radius.
+        radius sqrt(ex) and sqrt(ey), where ex and ey are the apparent
+        emittances. The cross-plane elements of the covariance matrix will not
+        all be zero. If `scale` is True, the x-x' and y-y' ellipses will be
+        scaled to unit radius.
         """
         self.transform(self.get_norm_mat_2D(inv=True))
         if scale:
@@ -185,26 +198,12 @@ class Envelope:
         return self.params
             
     def normed_params_2D(self):
-        """Return the normalized envelope parameters in the 2D sense."""
+        """Return the normalized envelope parameters in the 2D sense without
+        actually changing the envelope."""
         true_params = np.copy(self.params)
         normed_params = self.norm2D()
         self.params = true_params
         return normed_params
-            
-    def matrix(self):
-        """Create the envelope matrix P from the envelope parameters.
-        
-        The matrix is defined by x = Pc, where x = [x, x', y, y']^T and
-        c = [cos(psi), sin(psi)], with 0 <= psi <= 2pi. This is useful because
-        any transformation to the particle coordinate vector x also done to P.
-        For example, if x -> M.x, then P -> M.P.
-        """
-        a, b, ap, bp, e, f, ep, fp = self.params
-        return np.array([[a, b], [ap, bp], [e, f], [ep, fp]])
-        
-    def to_vec(self, P):
-        """Convert the envelope matrix to vector form."""
-        return P.flatten()
                 
     def transform(self, M):
         """Apply matrix M to the coordinates."""
@@ -213,7 +212,7 @@ class Envelope:
         
     def norm_transform(self, M):
         """Normalize, then apply M to the coordinates."""
-        self.norm()
+        self.norm4D()
         self.transform(M)
         
     def advance_phase(self, mux=0., muy=0.):
@@ -537,7 +536,7 @@ class Envelope:
         if method == 'auto':
             method = '4D' if unequal_eigtunes(M) else '2D'
         if method == '2D':
-            lattice_params = hf.params_from_transfer_matrix(M)
+            lattice_params = params_from_transfer_matrix(M)
             ax, ay = [lattice_params[key] for key in ('alpha_x', 'alpha_y')]
             bx, by = [lattice_params[key] for key in ('beta_x', 'beta_y')]
             self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
@@ -651,23 +650,23 @@ class Envelope:
                 * 1 : display a termination report.
                 * 2 : display progress during iterations
         """
-        def cost_func(twiss_params, factor=1e6):
+        def cost_func(p, factor=1e6):
             # To do: make this return the same as in scipy least_squares
-            self.fit_twiss4D(twiss_params)
+            self.fit_twiss4D(p)
             Sigma0 = self.cov()
             self.track(lattice)
             Sigma1 = self.cov()
             delta = factor * covmat2vec(Sigma1 - Sigma0)
             return 0.5 * np.sum(delta**2)
             
-        def get_avg_twiss_params():
-            twiss_params_tracked = []
+        def get_avg_p():
+            p_tracked = []
             for _ in range(nturns_avg + 1):
-                twiss_params_tracked.append(self.twiss4D())
+                p_tracked.append(self.twiss4D())
                 self.track(lattice)
-            return np.mean(twiss_params_tracked, axis=0)
+            return np.mean(p_tracked, axis=0)
             
-        def is_converged(cost, cost_reduction, step_norm, twiss_params):
+        def is_converged(cost, cost_reduction, step_norm, p):
             converged, message = False, 'Did not converge.'
             if cost < tol:
                 converged == True
@@ -675,7 +674,7 @@ class Envelope:
             if abs(cost_reduction) < ftol * cost:
                 converged = True
                 msg = '`ftol` termination condition is satisfied.'
-            if abs(step_norm) < xtol * (xtol + la.norm(twiss_params)):
+            if abs(step_norm) < xtol * (xtol + la.norm(p)):
                 converged = True
                 message = '`xtol` termination condition is satisfied.'
             return converged, message
@@ -684,7 +683,7 @@ class Envelope:
             return self.match_bare(lattice, '2D')
                     
         iteration = 0
-        old_twiss_params, old_cost = self.twiss4D(), +np.inf
+        old_p, old_cost = self.twiss4D(), +np.inf
         env_params_history = [self.params]
         converged, message = False, 'Did not converge.'
         
@@ -693,14 +692,14 @@ class Envelope:
             print_header()
         while not converged and iteration < max_iters:
             iteration += 1
-            twiss_params = get_avg_twiss_params()
-            cost = cost_func(twiss_params)
+            p = get_avg_p()
+            cost = cost_func(p)
             cost_reduction = cost - old_cost
-            step_norm = la.norm(twiss_params - old_twiss_params)
+            step_norm = la.norm(p - old_p)
             env_params_history.append(self.params)
-            converged, message = is_converged(cost, cost_reduction, step_norm,
-                                              twiss_params)
-            old_twiss_params, old_cost = twiss_params, cost
+            converged, message = is_converged(cost, cost_reduction,
+                                              step_norm, p)
+            old_p, old_cost = p, cost
             if verbose == 2:
                 print_iteration(iteration, cost, cost_reduction, step_norm)
         t_end = time.time()
@@ -709,12 +708,12 @@ class Envelope:
             tprint(message, 3)
             tprint('cost = {:.4e}'.format(cost), 3)
             tprint('iters = {}'.format(iteration), 3)
-        return MatchingResult(twiss_params, cost, iteration, t_end-t_start,
+        return MatchingResult(p, cost, iteration, t_end-t_start,
                               message, env_params_history)
 
     def _match_free(self, lattice):
         """Match by varying the envelope parameters without constraints. The
-        mode emittance of the beam will not be conserved.
+        intrinsic emittance of the beam will not be conserved.
         """
         def cost(params):
             self.params = params
@@ -777,6 +776,7 @@ class Envelope:
             
             
 class MatchingResult:
+    """Class to store the results of the matching algorithm"""
     def __init__(self, p, cost, iters, runtime, message, env_params_history):
         self.p, self.cost, self.iters, self.time = p, cost, iters, runtime
         self.env_params_history = np.array(env_params_history)

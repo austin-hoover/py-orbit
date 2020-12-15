@@ -1,15 +1,16 @@
 """
 Module to implement the AnalysisNode class.
 """
+
 # 3rd party
 import numpy as np
-
 # PyORBIT
 from bunch import Bunch
 from orbit.analysis import Stats
 from orbit.lattice import AccNode, AccActionsContainer, AccNodeBunchTracker
 from orbit.teapot import DriftTEAPOT
 from orbit.utils import orbitFinalize, NamedObject, ParamsDictObject
+
 
 def coords(bunch, mm_mrad=False):
     """Return the transverse coordinate array from the bunch."""
