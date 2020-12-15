@@ -47,7 +47,7 @@ def phase_adv_matrix(phi1, phi2):
     return R
 
 def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
-    """4D normalization matrix (uncoupled)"""
+    """Normalization matrix (uncoupled)"""
     def V_uu(alpha, beta):
         return np.array([[beta, 0], [-alpha, 1]]) / np.sqrt(beta)
     V = np.zeros((4, 4))
@@ -103,7 +103,7 @@ class Envelope:
         where 0 <= psi <= 2pi.
     """
     def __init__(self, eps=1., mode=1, ex_ratio=0.5, mass=0.93827231,
-                 energy=1., intensity=0., length=0, params=None):
+                 energy=1., intensity=0., length=1e-5, params=None):
         self.eps = eps
         self.mode = mode
         self.ex_ratio, self.ey_ratio = ex_ratio, 1 - ex_ratio
@@ -395,7 +395,7 @@ class Envelope:
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         return self.params
         
-    def to_bunch(self, nparts=0, length=0, no_env=False):
+    def to_bunch(self, nparts=0, no_env=False):
         """Add the envelope parameters to a Bunch object. The first two
         particles represent the envelope parameters.
         
@@ -404,8 +404,6 @@ class Envelope:
         nparts : int
             The number of particles in the bunch. The bunch will just hold the
             envelope parameters if nparts == 0.
-        length : float
-            The length of the bunch [meters].
         no_env : bool
             If True, do not include the envelope parameters in the first
             two bunch particles.
@@ -424,8 +422,10 @@ class Envelope:
             bunch.addParticle(a, ap, e, ep, 0., 0.)
             bunch.addParticle(b, bp, f, fp, 0., 0.)
         for (x, xp, y, yp) in self.generate_dist(nparts):
-            z = np.random.uniform(0, length)
+            z = np.random.uniform(0, self.length)
             bunch.addParticle(x, xp, y, yp, z, 0.)
+        if nparts > 0:
+            bunch.macroSize(self.intensity/nparts if self.intensity > 0 else 1)
         return bunch, params_dict
         
     def track(self, lattice, nturns=1, ntestparts=0, progbar=False):
@@ -435,7 +435,7 @@ class Envelope:
         `ntestparts` is nonzero, test particles will be tracked which receive
         linear space charge kicks based on the envelope parmaeters.
         """
-        bunch, params_dict = self.to_bunch(ntestparts, lattice.getLength())
+        bunch, params_dict = self.to_bunch(ntestparts)
         turns = trange(nturns) if progbar else range(nturns)
         for _ in turns:
             lattice.trackBunch(bunch, params_dict)
@@ -609,8 +609,8 @@ class Envelope:
             Sigma1 = self.cov()
             return 1e6 * covmat2vec(Sigma1 - Sigma0)
             
-        result = opt.least_squares(cost_func, self.twiss4D(), bounds=bounds,
-                                   **kwargs)
+        result = opt.least_squares(cost_func, self.twiss4D(),
+                                   bounds=twiss_bounds, **kwargs)
         self.fit_twiss4D(result.x)
         return result
 
@@ -726,6 +726,8 @@ class Envelope:
 
     def perturb(self, radius=0.1):
         """Randomly perturb the 4D Twiss parameters."""
+        if radius == 0:
+            return
         lo, hi = 1 - radius, 1 + radius
         ax, ay, bx, by, u, nu = self.twiss4D()
         ax_min, ax_max = lo*ax, hi*ax
