@@ -7,9 +7,9 @@ Reference: https://journals.aps.org/prab/pdf/10.1103/PhysRevSTAB.6.094202
 
 # Imports
 #------------------------------------------------------------------------------
-# Python
+# Internal
 import time
-# 3rd party
+# External
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
@@ -81,8 +81,8 @@ class Envelope:
         The rms intrinsic emittance of the beam [m*rad].
     mode : int
         Whether to choose eps2=0 (mode 1) or eps1=0 (mode 2).
-    ex_ratio : float
-        The x emittance ratio, such that ex = epsx_ratio * eps
+    ex_frac : float
+        The x emittance ratio, such that ex = ex_frac * eps
     mass : float
         The particle mass [GeV/c^2].
     energy : float
@@ -102,11 +102,11 @@ class Envelope:
             y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
         where 0 <= psi <= 2pi.
     """
-    def __init__(self, eps=1., mode=1, ex_ratio=0.5, mass=0.93827231,
+    def __init__(self, eps=1., mode=1, ex_frac=0.5, mass=0.93827231,
                  energy=1., intensity=0., length=1e-5, params=None):
         self.eps = eps
         self.mode = mode
-        self.ex_ratio, self.ey_ratio = ex_ratio, 1 - ex_ratio
+        self.ex_frac, self.ey_frac = ex_frac, 1 - ex_frac
         self.mass = mass
         self.energy = energy
         self.length = length
@@ -115,9 +115,9 @@ class Envelope:
             self.params = np.array(params)
             ex, ey = self.emittances()
             self.eps = ex + ey
-            self.ex_ratio = ex / self.eps
+            self.ex_frac = ex / self.eps
         else:
-            ex, ey = ex_ratio * eps, (1 - ex_ratio) * eps
+            ex, ey = ex_frac * eps, (1 - ex_frac) * eps
             rx, ry = np.sqrt(4 * ex), np.sqrt(4 * ey)
             if mode == 1:
                 self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
@@ -321,10 +321,10 @@ class Envelope:
         nu = abs(muy - mux)
         return nu if nu < np.pi else 2*np.pi - nu
         
-    def fit_twiss2D(self, ax, ay, bx, by, ex_ratio):
+    def fit_twiss2D(self, ax, ay, bx, by, ex_frac):
         """Fit the envelope to the 2D Twiss parameters."""
         V = Vmat_2D(ax, bx, ay, by)
-        ex, ey = ex_ratio * self.eps, (1 - ex_ratio) * self.eps
+        ex, ey = ex_frac * self.eps, (1 - ex_frac) * self.eps
         A = np.sqrt(4 * np.diag([ex, ex, ey, ey]))
         self.norm2D(scale=True)
         self.transform(np.matmul(V, A))
@@ -538,7 +538,7 @@ class Envelope:
             lattice_params = params_from_transfer_matrix(M)
             ax, ay = [lattice_params[key] for key in ('alpha_x', 'alpha_y')]
             bx, by = [lattice_params[key] for key in ('beta_x', 'beta_y')]
-            self.fit_twiss2D(ax, ay, bx, by, self.ex_ratio)
+            self.fit_twiss2D(ax, ay, bx, by, self.ex_frac)
         elif method == '4D':
             eigvals, eigvecs = la.eig(M)
             V = BL.construct_V(eigvecs)
@@ -560,7 +560,7 @@ class Envelope:
             hf.toggle_spacecharge_nodes(sc_nodes, 'on')
         return self.params
         
-    def match(self, lattice, solver_nodes, nturns=1, tol=1e-4, verbose=0):
+    def match(self, lattice, solver_nodes, tol=1e-4, verbose=0):
         """Match the envelope to the lattice.
         
         Calls `the least squares optimizer`, then calls the 'replace by avg'

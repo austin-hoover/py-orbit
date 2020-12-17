@@ -81,9 +81,12 @@ class AnalysisNode(DriftTEAPOT):
         """Extract the data from the node.
         
         dtype : str
-            The str options are {'env_params', 'testbunch_coords',
-            'bunch_coords', 'bunch_twiss', 'bunch_moments', 'bunch_twiss',
-            'bunch_moments', 'position'}.
+            'env_params': the envelope parameters
+            'testbunch_coords': the test bunch coordinates
+            'bunch_coords': the bunch coordinates
+            'bunch_twiss': the test bunch Twiss parameters
+            'bunch_moments': the bunch moments
+            'position': the position of the node
         turn : int or str
             If an int, `turn` is the turn number of position in data list.
             Choosing `all_turns` will return the the data for all turns in
