@@ -129,3 +129,8 @@ def get_analysis_nodes_data(analysis_nodes, dtype, turn=0):
     we want the data as a function of s.
     """
     return np.array([node.get_data(dtype, turn) for node in analysis_nodes])
+
+
+if __name__ == 'main':
+    # Add tests here.
+    pass

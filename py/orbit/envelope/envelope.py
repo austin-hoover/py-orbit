@@ -7,9 +7,10 @@ Reference: https://journals.aps.org/prab/pdf/10.1103/PhysRevSTAB.6.094202
 
 # Imports
 #------------------------------------------------------------------------------
-# Internal
+# Standard
 import time
-# External
+import copy
+# Third party
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
@@ -125,6 +126,9 @@ class Envelope:
                 self.params = np.array([rx, 0, 0, rx, 0, +ry, -ry, 0])
         self.twiss_bounds = twiss_bounds
         
+    def copy(self):
+        return copy.deepcopy(self)
+                
     def set_params(self, a, b, ap, bp, e, f, ep, fp):
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         
@@ -475,10 +479,14 @@ class Envelope:
         if self.perveance == 0:
             return hf.transfer_matrix(lattice, self.mass, self.energy)
             
+        # Create copy of envelope. The envelope parameters will change if the
+        # beam is not matched to the lattice, so make a copy.
+        env = self.copy()
+        
         step_arr_init = np.full(6, 1e-6)
         step_arr = np.copy(step_arr_init)
         step_reduce = 20.
-        bunch, params_dict = self.to_bunch()
+        bunch, params_dict = env.to_bunch()
         bunch.addParticle(0., 0., 0., 0., 0., 0.);
         bunch.addParticle(step_arr[0]/step_reduce, 0., 0., 0., 0., 0.)
         bunch.addParticle(0., step_arr[1]/step_reduce, 0., 0., 0., 0.)
