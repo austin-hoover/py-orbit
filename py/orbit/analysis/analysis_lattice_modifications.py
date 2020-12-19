@@ -58,8 +58,10 @@ def add_analysis_nodes(lattice, kind='env_monitor', min_sep=1e-5):
                                  idx, AccNode.BEFORE)
         return analysis_node
 
-    analysis_nodes = [add_analysis_node(node, idx, pos)
-                     for (node, idx, pos) in idx_pos_list(nodes, min_sep)]
+    analysis_nodes = []
+    for (node, idx, pos) in idx_pos_list(nodes, min_sep):
+        analysis_nodes.append(add_analysis_node(node, idx, pos))
+
     # Add node at exit of lattice
     last_node, last_position = lattice.getNodes()[-1], lattice.getLength()
     analysis_node = add_analysis_node(last_node, -1, last_position)

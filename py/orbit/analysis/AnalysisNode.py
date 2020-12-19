@@ -77,6 +77,10 @@ class AnalysisNode(DriftTEAPOT):
             _data = Stats(X)
         self.data.append(_data)
         
+    def clear_data(self):
+        """Delete all data stored in the node."""
+        self.data = []
+        
     def get_data(self, dtype, turn=0):
         """Extract the data from the node.
         
@@ -86,7 +90,6 @@ class AnalysisNode(DriftTEAPOT):
             'bunch_coords': the bunch coordinates
             'bunch_twiss': the test bunch Twiss parameters
             'bunch_moments': the bunch moments
-            'position': the position of the node
         turn : int or str
             If an int, `turn` is the turn number of position in data list.
             Choosing `all_turns` will return the the data for all turns in
@@ -105,8 +108,6 @@ class AnalysisNode(DriftTEAPOT):
                 return _data.twiss
             elif dtype == 'bunch_moments':
                 return _data.moments
-            elif dtype == 'position':
-                return self.position
         elif turn == 'all_turns':
             if dtype == 'env_params':
                 return np.array([d.env_params for d in self.data])
@@ -128,7 +129,15 @@ def get_analysis_nodes_data(analysis_nodes, dtype, turn=0):
     This is used when the beam is tracked once throught the lattice and
     we want the data as a function of s.
     """
+    if dtype == 'position':
+        return np.array([node.position for node in analysis_nodes])
     return np.array([node.get_data(dtype, turn) for node in analysis_nodes])
+    
+    
+def clear_analysis_nodes_data(analysis_nodes):
+    """Delete the data stored in the nodes."""
+    for node in analysis_nodes:
+        node.clear_data()
 
 
 if __name__ == 'main':
