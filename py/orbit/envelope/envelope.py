@@ -71,7 +71,7 @@ twiss_bounds = (lb, ub)
 #------------------------------------------------------------------------------
 
 class Envelope:
-    """Class for the Danilov distribution envelope.
+    """Class for the transverse beam envelope.
     
     This class includes methods to compute the beam statistics and interact
     with PyORBIT using the envelope parameterization.
@@ -104,7 +104,7 @@ class Envelope:
         where 0 <= psi <= 2pi.
     """
     def __init__(self, eps=1., mode=1, ex_frac=0.5, mass=0.93827231,
-                 energy=1., intensity=0., length=1e-5, params=None):
+                 energy=1.0, length=1e-5, intensity=0.0, params=None):
         self.eps = eps
         self.mode = mode
         self.ex_frac, self.ey_frac = ex_frac, 1 - ex_frac
