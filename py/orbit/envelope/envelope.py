@@ -780,7 +780,7 @@ class Envelope:
         tprint('ax, ay = {:.3f}, {:.3f} [rad]'.format(ax, ay))
         tprint('bx, by = {:.3f}, {:.3f} [m]'.format(bx, by))
         tprint('u = {:.3f}'.format(u))
-        tprint('nu = {:.3f} [deg]'.format(np.degrees(nu))
+        tprint('nu = {:.3f} [deg]'.format(np.degrees(nu)))
             
             
             
