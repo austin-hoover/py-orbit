@@ -517,7 +517,9 @@ class Envelope:
         Parameters
         ----------
         lattice : TEAPOT_Lattice object
-            The lattice to match into (no solver nodes).
+            The lattice in which to match. If envelope solver nodes nodes are
+            in the lattice, a list of these nodes needs to be passed as the
+            `sc_nodes` parameter so they can be turned off/on.
         method : str
             If '4D', match to the lattice using the eigenvectors of the
             transfer matrix. This may result in the beam being completely
