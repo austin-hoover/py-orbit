@@ -437,7 +437,7 @@ class Envelope:
         
         The envelope parameters are updated after it is tracked. If
         `ntestparts` is nonzero, test particles will be tracked which receive
-        linear space charge kicks based on the envelope parmaeters.
+        linear space charge kicks based on the envelope parameters.
         """
         bunch, params_dict = self.to_bunch(ntestparts)
         turns = trange(nturns) if progbar else range(nturns)
@@ -473,14 +473,14 @@ class Envelope:
         Returns
         -------
         M : NumPy array, shape (4, 4)
-            The 4x4 linear transfer matrix of the combinded lattice + space
+            The 4x4 linear transfer matrix of the combined lattice + space
             charge focusing system.
         """
         if self.perveance == 0:
             return hf.transfer_matrix(lattice, self.mass, self.energy)
             
-        # Create copy of envelope. The envelope parameters will change if the
-        # beam is not matched to the lattice, so make a copy.
+        # The envelope parameters will change if the beam is not matched to the
+        # lattice, so make a copy.
         env = self.copy()
         
         step_arr_init = np.full(6, 1e-6)
