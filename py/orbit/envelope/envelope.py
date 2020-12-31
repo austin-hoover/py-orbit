@@ -643,7 +643,7 @@ class Envelope:
         self.fit_twiss4D(result.x)
         return result
 
-    def _match_replace_by_avg(self, lattice, nturns_avg=15, max_iters=20,
+    def _match_replace_by_avg(self, lattice, nturns_avg=15, max_iters=100,
                               tol=1e-6, ftol=1e-8, xtol=1e-8, verbose=0):
         """Simple 4D matching algorithm.
         
