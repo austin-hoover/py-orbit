@@ -445,6 +445,13 @@ class Envelope:
             lattice.trackBunch(bunch, params_dict)
         self.from_bunch(bunch)
         
+    def track_store_params(self, lattice, nturns):
+        tbt_params = [self.params]
+        for _ in range(nturns):
+            self.track(lattice)
+            tbt_params.append(self.params)
+        return tbt_params
+        
     def tunes(self, lattice):
         """Get the fractional horizontal and vertical tunes."""
         mux0, muy0 = self.phases()
@@ -570,12 +577,8 @@ class Envelope:
             hf.toggle_spacecharge_nodes(sc_nodes, 'on')
         return self.params
         
-    def match(self, lattice, solver_nodes, tol=1e-4, verbose=0):
-        """Match the envelope to the lattice.
-        
-        Calls `the least squares optimizer`, then calls the 'replace by avg'
-        method if least squares did not exactly converge.
-        """
+    def match(self, lattice, solver_nodes, tol=1e-4, verbose=0, method=None):
+        """Match the envelope to the lattice."""
         if self.perveance == 0:
             return self.match_bare(lattice, solver_nodes)
             
@@ -583,15 +586,34 @@ class Envelope:
             self.set_twiss_param_4D('u', 0.5)
             self.set_twiss_param_4D('nu', np.pi/2)
             self.match_bare(lattice, '2D', solver_nodes)
-            
         initialize()
-        result = self._match_lsq(lattice, verbose=verbose)
-        if result.cost > tol:
-            print "Cost = {:.2e} > tol.".format(result.cost)
-            print "Trying 'replace by average' method."
-            initialize()
-            result = self._match_replace_by_avg(lattice, verbose=verbose)
-        return result
+        
+        if method == 'lsq':
+            return self._match_lsq(lattice, verbose=verbose)
+        elif method == 'replace_by_avg':
+            return self._match_replace_by_avg(lattice, verbose=verbose)
+        else:
+            result = self._match_lsq(lattice, verbose=verbose)
+            if result.cost > tol:
+                print "Cost = {:.2e} > tol.".format(result.cost)
+                print "Trying 'replace by average' method."
+                initialize()
+                result = self._match_replace_by_avg(lattice, verbose=verbose)
+            return result
+            
+    def _mismatch_error(self, lattice, factor=1e6, ssq=False):
+        """Return the difference between the initial/final beam moments after
+        tracking once through the lattice. The method does not change the
+        envelope."""
+        env = self.copy()
+        Sigma0 = env.cov()
+        env.track(lattice)
+        Sigma1 = env.cov()
+        residuals = factor * covmat2vec(Sigma1 - Sigma0)
+        if ssq:
+            return 0.5 * np.sum(residuals**2)
+        else:
+            return residuals
         
     def _match_lsq(self, lattice, **kwargs):
         """Run least squares optimizer to find the matched envelope.
@@ -612,19 +634,16 @@ class Envelope:
             fields are `x`: the final parameter vector, and `cost`: the final
             cost function.
         """
-        def cost_func(twiss_params, nturns=1):
+        def cost_func(twiss_params):
             self.fit_twiss4D(twiss_params)
-            Sigma0 = self.cov()
-            self.track(lattice)
-            Sigma1 = self.cov()
-            return 1e6 * covmat2vec(Sigma1 - Sigma0)
-            
+            return self._mismatch_error(lattice)
+
         result = opt.least_squares(cost_func, self.twiss4D(),
                                    bounds=twiss_bounds, **kwargs)
         self.fit_twiss4D(result.x)
         return result
 
-    def _match_replace_by_avg(self, lattice, nturns_avg=15, max_iters=2000,
+    def _match_replace_by_avg(self, lattice, nturns_avg=15, max_iters=20,
                               tol=1e-6, ftol=1e-8, xtol=1e-8, verbose=0):
         """Simple 4D matching algorithm.
         
@@ -659,15 +678,6 @@ class Envelope:
                 * 1 : display a termination report.
                 * 2 : display progress during iterations
         """
-        def cost_func(p, factor=1e6):
-            # To do: make this return the same as in scipy least_squares
-            self.fit_twiss4D(p)
-            Sigma0 = self.cov()
-            self.track(lattice)
-            Sigma1 = self.cov()
-            delta = factor * covmat2vec(Sigma1 - Sigma0)
-            return 0.5 * np.sum(delta**2)
-            
         def get_avg_p():
             p_tracked = []
             for _ in range(nturns_avg + 1):
@@ -693,7 +703,7 @@ class Envelope:
                     
         iteration = 0
         old_p, old_cost = self.twiss4D(), +np.inf
-        env_params_history = [self.params]
+        history = [old_p]
         converged, message = False, 'Did not converge.'
         
         t_start = time.time()
@@ -702,13 +712,14 @@ class Envelope:
         while not converged and iteration < max_iters:
             iteration += 1
             p = get_avg_p()
-            cost = cost_func(p)
+            self.fit_twiss4D(p)
+            cost = self._mismatch_error(lattice, ssq=True)
             cost_reduction = cost - old_cost
             step_norm = la.norm(p - old_p)
-            env_params_history.append(self.params)
             converged, message = is_converged(cost, cost_reduction,
                                               step_norm, p)
             old_p, old_cost = p, cost
+            history.append(p)
             if verbose == 2:
                 print_iteration(iteration, cost, cost_reduction, step_norm)
         t_end = time.time()
@@ -718,7 +729,7 @@ class Envelope:
             tprint('cost = {:.4e}'.format(cost), 3)
             tprint('iters = {}'.format(iteration), 3)
         return MatchingResult(p, cost, iteration, t_end-t_start,
-                              message, env_params_history)
+                              message, history)
 
     def _match_free(self, lattice):
         """Match by varying the envelope parameters without constraints. The
@@ -726,13 +737,9 @@ class Envelope:
         """
         def cost(params):
             self.params = params
-            Sigma0 = self.cov()
-            self.track(lattice)
-            Sigma1 = self.cov()
-            return 1e6* covmat2vec(Sigma1 - Sigma0)
+            return self._mismatch_error(lattice)
             
-        result = opt.least_squares(cost, self.params, verbose=2, xtol=1e-12)
-        return result.cost
+        return opt.least_squares(cost, self.params, verbose=2, xtol=1e-12)
 
     def perturb(self, radius=0.1):
         """Randomly perturb the 4D Twiss parameters."""
@@ -788,10 +795,10 @@ class Envelope:
             
 class MatchingResult:
     """Class to store the results of the matching algorithm"""
-    def __init__(self, p, cost, iters, runtime, message, env_params_history):
+    def __init__(self, p, cost, iters, runtime, message, history):
         self.p, self.cost, self.iters, self.time = p, cost, iters, runtime
-        self.env_params_history = np.array(env_params_history)
         self.message = message
+        self.history = np.array(history)
 
 def print_header():
     print '{0:^15}{1:^15}{2:^15}{3:^15}'.format(
