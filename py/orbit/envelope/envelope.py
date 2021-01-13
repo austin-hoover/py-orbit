@@ -61,7 +61,7 @@ pad = 1e-4
 alpha_min, alpha_max = -np.inf, np.inf
 beta_min, beta_max = pad, np.inf
 nu_min, nu_max = pad, np.pi - pad
-u_min, u_max = pad, 1 - pad
+u_min, u_max = 0, 1 - pad
 lb = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
 ub = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
 twiss_bounds = (lb, ub)
@@ -454,9 +454,10 @@ class Envelope:
         
     def tunes(self, lattice):
         """Get the fractional horizontal and vertical tunes."""
-        mux0, muy0 = self.phases()
-        self.track(lattice)
-        mux1, muy1 = self.phases()
+        env = self.copy()
+        mux0, muy0 = env.phases()
+        env.track(lattice)
+        mux1, muy1 = env.phases()
         tune_x = (mux1 - mux0) / (2*np.pi)
         tune_y = (muy1 - muy0) / (2*np.pi)
         tune_x %= 1
@@ -637,7 +638,6 @@ class Envelope:
         def cost_func(twiss_params):
             self.fit_twiss4D(twiss_params)
             return self._mismatch_error(lattice)
-
         result = opt.least_squares(cost_func, self.twiss4D(),
                                    bounds=twiss_bounds, **kwargs)
         self.fit_twiss4D(result.x)
