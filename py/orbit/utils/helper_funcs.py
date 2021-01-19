@@ -28,11 +28,16 @@ def tprint(string, indent=4):
     print indent*' ' + str(string)
     
          
-def get_perveance(mass, energy, density):
-    """"Return the dimensionless beam perveance."""
+def get_perveance(mass, energy, line_density):
+    """"Return the dimensionless beam perveance.
+    
+    mass : particle mass [GeV/c^2]
+    energy : kinetic energy per particle [GeV]
+    line_density : number of particles per meter in longitudinal direction
+    """
     gamma = 1 + (energy / mass) # Lorentz factor
-    beta = np.sqrt(1 - (1 / (gamma**2))) # velocity/speed_of_light
-    return (2 * classical_proton_radius * density) / (beta**2 * gamma**3)
+    beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
+    return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
     
     
 def lattice_from_file(file, seq='', fringe=False):

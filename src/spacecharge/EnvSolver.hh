@@ -26,19 +26,18 @@ class EnvSolver: public OrbitUtils::CppPyWrapper
 {
     public:
     
-    double Q; // beam perveance
-
-    /** Constructor */
+    // Constructor
     EnvSolver(double perveance);
-
-    /** Apply space charge kick.
-     
-     The method tracks two particles. The particle coordinates map to the parameters {a, b, e, f} and their
-     slopes in the following way:
-         particle 1 --> {x:a, x':a', y:e, y':e'},
-         particle 2 --> {x:e, x':e', y:f, y':f'}.
-    */
+    
+    // Apply space charge kick to envelope and bunch particles
     void trackBunch(Bunch* bunch, double length);
+    
+    // Variables
+    double Q; // beam perveance
+    double a, b, e, f; // parameters of ellipse in real space
+    double phi; // tilt angle below x axis
+    double cx, cy; // ellipse radii
+    
 };
 
 #endif

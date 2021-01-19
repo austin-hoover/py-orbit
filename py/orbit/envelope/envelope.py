@@ -57,11 +57,11 @@ def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
     return V
 
 # Define bounds on the 4D Twiss parameters
-pad = 1e-4
+pad = 1e-5
 alpha_min, alpha_max = -np.inf, np.inf
 beta_min, beta_max = pad, np.inf
 nu_min, nu_max = pad, np.pi - pad
-u_min, u_max = 0, 1 - pad
+u_min, u_max = pad, 1 - pad
 lb = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
 ub = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
 twiss_bounds = (lb, ub)
@@ -140,9 +140,9 @@ class Envelope:
     def set_spacecharge(self, intensity):
         """Set the beam perveance."""
         self.intensity = intensity
-        self.charge_density = intensity / self.length
+        self.line_density = intensity / self.length
         self.perveance = get_perveance(self.mass, self.energy,
-                                       self.charge_density)
+                                       self.line_density)
                                           
     def set_length(self, length):
         """Set the axial beam length. This will change the beam perveance."""
@@ -290,19 +290,20 @@ class Envelope:
         a, b = self.get_params_for_dim(x1)
         e, f = self.get_params_for_dim(x2)
         phi = self.tilt_angle(x1, x2)
-        cos, sin = np.cos(phi), np.sin(phi)
-        cos2, sin2, sincos = cos**2, sin**2, sin*cos
-        x2, y2 = a**2 + b**2, e**2 + f**2
-        A = abs(a*f - b*e)
-        cx = np.sqrt(A**2 / (y2*cos2 + x2*sin2 + 2*(a*e + b*f)*sincos))
-        cy = np.sqrt(A**2 / (x2*cos2 + y2*sin2 - 2*(a*e + b*f)*sincos))
+        sin, cos = np.sin(phi), np.cos(phi)
+        sin2, cos2 = sin**2, cos**2
+        xx = a**2 + b**2
+        yy = e**2 + f**2
+        xy = a*e + b*f
+        cx = np.sqrt(abs(xx*cos2 + yy*sin2 - 2*xy*sin*cos))
+        cy = np.sqrt(abs(xx*sin2 + yy*cos2 + 2*xy*sin*cos))
         return np.array([cx, cy])
         
     def area(self, x1='x', x2='y'):
         """Return the area in the x1-x2 plane."""
         a, b = self.get_params_for_dim(x1)
         e, f = self.get_params_for_dim(x2)
-        return np.pi * np.abs(a*f - b*e)
+        return np.pi * abs(a*f - b*e)
         
     def phases(self):
         """Return the horizontal/vertical phases in range [0, 2*pi] of a
@@ -572,7 +573,7 @@ class Envelope:
             f = ep = pad
         self.set_params(a, b, ap, bp, e, f, ep, fp)
         # Avoid diagonal line in x-y space. This may occur for coupled lattice.
-        self.advance_phase(1e-8 * np.pi)
+#        self.advance_phase(1e-8 * np.pi)
         
         if sc_nodes is not None:
             hf.toggle_spacecharge_nodes(sc_nodes, 'on')
@@ -636,6 +637,7 @@ class Envelope:
             cost function.
         """
         def cost_func(twiss_params):
+            ax, ay, bx, by, u, nu = twiss_params
             self.fit_twiss4D(twiss_params)
             return self._mismatch_error(lattice)
         result = opt.least_squares(cost_func, self.twiss4D(),

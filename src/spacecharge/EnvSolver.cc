@@ -1,44 +1,58 @@
 #include "EnvSolver.hh"
 
+
 EnvSolver::EnvSolver(double perveance): CppPyWrapper(NULL)
 {
     Q = perveance;
 }
-    
+
+
 void EnvSolver::trackBunch(Bunch* bunch, double length)
 {
-    double phi, cosp, sinp, cos2p, sin2p;
-    double cx, cy, factor;
-    double a, b, e, f;
-    double x, y;
-
+    double xx, yy, xy, _cos, _sin, cos2, sin2, sincos, factor;
     // Compute ellipse size and orientation
-    a = bunch->x(0);
-    b = bunch->x(1);
-    e = bunch->y(0);
-    f = bunch->y(1);
-
-    phi = -0.5 * atan2(2*(a*e + b*f), (a*a + b*b - e*e - f*f));
-    cosp = cos(phi);
-    sinp = sin(phi);
-    cos2p = cosp*cosp;
-    sin2p = sinp*sinp;
-
-    cx = sqrt(pow(a*f-b*e, 2) / ((e*e+f*f)*cos2p + (a*a+b*b)*sin2p +  2*(a*e+b*f)*cosp*sinp));
-    cy = sqrt(pow(a*f-b*e, 2) / ((a*a+b*b)*cos2p + (e*e+f*f)*sin2p -  2*(a*e+b*f)*cosp*sinp));
+    a = bunch->x(0); e = bunch->y(0);
+    b = bunch->x(1); f = bunch->y(1);
+    xx = a*a + b*b; // 4 * <x^2>
+    yy = e*e + f*f; // 4 * <y^2>
+    xy = a*e + b*f; // 4 * <xy>
+    phi = -0.5 * atan2(2*xy, xx - yy);
+    _cos = cos(phi);
+    _sin = sin(phi);
+    cos2 = _cos * _cos;
+    sin2 = _sin * _sin;
+    sincos = _sin * _cos;
+    cx = sqrt(abs(xx*cos2 + yy*sin2 - 2*xy*sincos));
+    cy = sqrt(abs(xx*sin2 + yy*cos2 + 2*xy*sincos));
     factor = 2 * Q / (cx + cy);
-
-    // Track envelope parameters
-    bunch->xp(0) += (factor * ((a*cos2p - e*sinp*cosp)/cx + (a*sin2p + e*sinp*cosp)/cy)) * length;
-    bunch->xp(1) += (factor * ((b*cos2p - f*sinp*cosp)/cx + (b*sin2p + f*sinp*cosp)/cy)) * length;
-    bunch->yp(0) += (factor * ((e*cos2p + a*sinp*cosp)/cy + (e*sin2p - a*sinp*cosp)/cx)) * length;
-    bunch->yp(1) += (factor * ((f*cos2p + b*sinp*cosp)/cy + (f*sin2p - b*sinp*cosp)/cx)) * length;
     
-    // Track particles
+    // Track envelope
+    if (cx > 0) {
+        bunch->xp(0) += (factor * (a*cos2 - e*sincos)/cx) * length;
+        bunch->xp(1) += (factor * (b*cos2 - f*sincos)/cx) * length;
+        bunch->yp(0) += (factor * (e*sin2 - a*sincos)/cx) * length;
+        bunch->yp(1) += (factor * (f*sin2 - b*sincos)/cx) * length;
+    }
+    if (cy > 0) {
+        bunch->xp(0) += (factor * (a*sin2 + e*sincos)/cy) * length;
+        bunch->xp(1) += (factor * (b*sin2 + f*sincos)/cy) * length;
+        bunch->yp(0) += (factor * (e*cos2 + a*sincos)/cy) * length;
+        bunch->yp(1) += (factor * (f*cos2 + b*sincos)/cy) * length;
+    }
+    
+    // Track bunch particles
+    //   To do: add Jeff's code to handle particles outside ellipse
+    double x, y;
     for (int i = 2; i < bunch->getSize(); i++) {
-        x = bunch->x(i);
+        x = bunch->x(i); 
         y = bunch->y(i);
-        bunch->xp(i) += (factor * ((cos2p/cx + sin2p/cy)*x + (1/cy - 1/cx)*sinp*cosp*y)) * length;
-        bunch->yp(i) += (factor * ((sin2p/cx + cos2p/cy)*y + (1/cy - 1/cx)*sinp*cosp*x)) * length;
+        if (cx > 0) {
+            bunch->xp(i) += (factor * (cos2*x - sincos*y)/cx) * length;
+            bunch->yp(i) += (factor * (sin2*y - sincos*x)/cx) * length;
+        }
+        if (cy > 0) {
+            bunch->xp(i) += (factor * (sin2*x + sincos*y)/cy) * length;
+            bunch->yp(i) += (factor * (cos2*y + sincos*x)/cy) * length;
+        }
     }
 }
