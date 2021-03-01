@@ -40,10 +40,14 @@ def get_perveance(mass, energy, line_density):
     return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
     
     
-def lattice_from_file(file, seq='', fringe=False):
-    """Create lattice from MADX file."""
+def lattice_from_file(file, seq='', fringe=False, kind='madx'):
+    """Create lattice from MAD or MADX file."""
     lattice = teapot.TEAPOT_Lattice()
-    lattice.readMADX(file, seq)
+    if kind == 'madx':
+        lattice.readMADX(file, seq)
+    elif kind == 'mad':
+        line = seq
+        lattice.readMAD(file, line)
     lattice.set_fringe(fringe)
     return lattice
     
