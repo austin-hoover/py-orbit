@@ -17,7 +17,6 @@ import scipy.optimize as opt
 from tqdm import trange
 # PyORBIT
 from bunch import Bunch
-from orbit.analysis.analysis import covmat2vec
 from orbit.coupling import bogacz_lebedev as BL
 from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.utils import helper_funcs as hf
@@ -55,6 +54,11 @@ def Vmat_2D(alpha_x, beta_x, alpha_y, beta_y):
     V[:2, :2] = V_uu(alpha_x, beta_x)
     V[2:, 2:] = V_uu(alpha_y, beta_y)
     return V
+    
+def covmat2vec(S):
+    """Return array of 10 unique elements of covariance matrix."""
+    return np.array([S[0,0], S[0,1], S[0,2], S[0,3], S[1,1], S[1,2], S[1,3],
+                     S[2,2], S[2,3], S[3,3]])
 
 # Define bounds on the 4D Twiss parameters
 pad = 1e-5
@@ -86,7 +90,7 @@ class Envelope:
         The x emittance ratio, such that ex = ex_frac * eps
     mass : float
         The particle mass [GeV/c^2].
-    energy : float
+    kin_energy : float
         The kinetic energy per particle [GeV].
     intensity : float
         The number of particles contained in the envelope. If 0, the particles
@@ -104,12 +108,12 @@ class Envelope:
         where 0 <= psi <= 2pi.
     """
     def __init__(self, eps=1., mode=1, ex_frac=0.5, mass=0.93827231,
-                 energy=1.0, length=1e-5, intensity=0.0, params=None):
+                 kin_energy=1.0, length=1e-5, intensity=0.0, params=None):
         self.eps = eps
         self.mode = mode
         self.ex_frac, self.ey_frac = ex_frac, 1 - ex_frac
         self.mass = mass
-        self.energy = energy
+        self.kin_energy = kin_energy
         self.length = length
         self.set_spacecharge(intensity)
         if params is not None:
@@ -141,7 +145,7 @@ class Envelope:
         """Set the beam perveance."""
         self.intensity = intensity
         self.line_density = intensity / self.length
-        self.perveance = get_perveance(self.mass, self.energy,
+        self.perveance = get_perveance(self.mass, self.kin_energy,
                                        self.line_density)
                                           
     def set_length(self, length):
@@ -376,7 +380,7 @@ class Envelope:
         yp = ep*cos + fp*sin
         return np.array([x, xp, y, yp])
         
-    def generate_dist(self, nparts, density='uniform'):
+    def generate_dist(self, nparts=1, density='uniform'):
         """Generate a distribution of particles from the envelope.
 
         Returns: NumPy array, shape (nparts, 4)
@@ -421,7 +425,7 @@ class Envelope:
         params_dict : dict
             The dictionary of parameters for the bunch.
         """
-        bunch, params_dict = initialize_bunch(self.mass, self.energy)
+        bunch, params_dict = initialize_bunch(self.mass, self.kin_energy)
         if not no_env:
             a, b, ap, bp, e, f, ep, fp = self.params
             bunch.addParticle(a, ap, e, ep, 0., 0.)
@@ -486,7 +490,7 @@ class Envelope:
             charge focusing system.
         """
         if self.perveance == 0:
-            return hf.transfer_matrix(lattice, self.mass, self.energy)
+            return hf.transfer_matrix(lattice, self.mass, self.kin_energy)
             
         # The envelope parameters will change if the beam is not matched to the
         # lattice, so make a copy.
