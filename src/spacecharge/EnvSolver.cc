@@ -71,6 +71,8 @@ void EnvSolver::trackBunch(Bunch* bunch, double length)
             }
         }
         else {
+            // Using expression derived here: https://arxiv.org/abs/physics/0108040. This
+            // has not been tested yet!
             B = xn2 + yn2 - cx2 - cy2;
             C = xn2*cy2 + yn2*cx2 - cx2*cy2;
             t1 = pow(B*B/4 + C, 0.5) + B/2;
