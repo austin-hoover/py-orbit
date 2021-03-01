@@ -12,7 +12,7 @@ from orbit.teapot import DriftTEAPOT
 from orbit.utils import orbitFinalize, NamedObject, ParamsDictObject
 
 
-def coords(bunch, mm_mrad=False):
+def get_coords(bunch, mm_mrad=False):
     """Return the transverse coordinate array from the bunch."""
     nparts = bunch.getSize()
     X = np.zeros((nparts, 4))
@@ -59,16 +59,17 @@ class AnalysisNode(DriftTEAPOT):
         'bunch_stats'
             Stores the bunch moments and twiss parameters.
     """
-    def __init__(self, position, kind, name='analysis'):
+    def __init__(self, position, kind, name='analysis', mm_mrad=True):
         DriftTEAPOT.__init__(self, name)
         self.position = position
         self.setLength(0.0)
         self.kind = kind
+        self.mm_mrad = mm_mrad
         self.data = []
     
     def track(self, params_dict):
         """Store the beam data."""
-        X = coords(params_dict['bunch'], mm_mrad=True)
+        X = get_coords(params_dict['bunch'], self.mm_mrad)
         if self.kind == 'env_monitor':
             _data = EnvBunch(X)
         elif self.kind == 'bunch_monitor':
@@ -108,6 +109,8 @@ class AnalysisNode(DriftTEAPOT):
                 return _data.twiss
             elif dtype == 'bunch_moments':
                 return _data.moments
+            elif dtype == 'bunch_cov':
+                return _data.Sigma
         elif turn == 'all_turns':
             if dtype == 'env_params':
                 return np.array([d.env_params for d in self.data])
@@ -140,6 +143,16 @@ def clear_analysis_nodes_data(analysis_nodes):
         node.clear_data()
 
 
-if __name__ == 'main':
-    # Add tests here.
-    pass
+class WireScannerNode(DriftTEAPOT):
+    """Simple node to measure <x^2>, <y^2>, and <xy>.
+    
+    To do: add measurement error.
+    """
+    def __init__(self, name='ws'):
+        DriftTEAPOT.__init__(self, name)
+        self.x2 = self.y2 = self.xy = 0.0
+
+    def track(self, params_dict):
+        X = get_coords(params_dict['bunch'])
+        Sigma = np.cov(X.T)
+        self.x2, self.y2, self.xy = Sigma[0, 0], Sigma[2, 2], Sigma[0, 2]
