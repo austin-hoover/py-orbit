@@ -113,11 +113,11 @@ class AnalysisNode(DriftTEAPOT):
                 return _data.Sigma
         elif turn == 'all_turns':
             if dtype == 'env_params':
-                return np.array([d.env_params for d in self.data])
+                return np.array([_data.env_params for _data in self.data])
             elif dtype == 'testbunch_coords':
-                return np.array([d.testbunch_coords for d in self.data])
+                return np.array([_data.testbunch_coords for _data in self.data])
             elif dtype == 'bunch_coords':
-                return np.array(self.data)
+                return self.data
             elif dtype == 'bunch_twiss':
                 return np.array([d.twiss for d in self.data])
             elif dtype == 'bunch_twiss':
