@@ -2,7 +2,7 @@
 This module contains functions for use in PyORBIT scripts.
 """
 
-# 3rd party
+# Third party
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
@@ -14,26 +14,44 @@ from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.teapot_base import MatrixGenerator
 from orbit.matrix_lattice import MATRIX_Lattice
 from orbit.bunch_generators import (
-    TwissContainer,
-    WaterBagDist2D,
-    GaussDist2D,
-    KVDist2D
-)
+    TwissContainer, WaterBagDist2D, GaussDist2D, KVDist2D)
 from orbit.utils.consts import classical_proton_radius
 from orbit_utils import Matrix
 
          
 def tprint(string, indent=4):
-    """Print with indent."""
+    """Print with indent.
+    
+    Parameters
+    ----------
+    string : str
+        String to print.
+    indent : int
+        Number of spaces of indent.
+    
+    Returns
+    -------
+    None
+    """
     print indent*' ' + str(string)
     
          
 def get_perveance(mass, energy, line_density):
-    """"Return the dimensionless beam perveance.
+    """"Return dimensionless beam perveance.
     
-    mass : particle mass [GeV/c^2]
-    energy : kinetic energy per particle [GeV]
-    line_density : number of particles per meter in longitudinal direction
+    Parameters
+    ----------
+    mass : float
+        Mass per particle [GeV/c^2].
+    energy : float
+        Kinetic energy per particle [GeV].
+    line_density : float
+        Number density in longitudinal direction [m^-1].
+    
+    Returns
+    -------
+    float
+        Dimensionless space charge perveance
     """
     gamma = 1 + (energy / mass) # Lorentz factor
     beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
@@ -41,7 +59,24 @@ def get_perveance(mass, energy, line_density):
     
     
 def lattice_from_file(file, seq='', fringe=False, kind='madx'):
-    """Create lattice from MAD or MADX file."""
+    """Shortcut to create TEAPOT_Lattice from MAD or MADX file.
+    
+    Parameters
+    ----------
+    file : str
+        '.lat' file output from MADX script.
+    seq : str
+        Key word for start of beam line definition in `file`. In MAD this is
+        called 'line'.
+    fringe : bool
+        Whether to turn on fringe fields.
+    kind : {'madx', 'mad'}
+        File format.
+    
+    Returns
+    -------
+    TEAPOT_Lattice
+    """
     lattice = teapot.TEAPOT_Lattice()
     if kind == 'madx':
         lattice.readMADX(file, seq)
@@ -53,26 +88,78 @@ def lattice_from_file(file, seq='', fringe=False, kind='madx'):
     
 
 def tilt_elements_containing(lattice, key, angle):
-    """Tilt all elements with `key` in their name."""
-    [node.setTiltAngle(angle) for node in lattice.get_nodes_containing(key)]
+    """Tilt all elements with `key` in their name. Only used this once... may
+    delete.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        The lattice containing the elements.
+    key : str
+        Key word which contained in element names to be tilted. For example:
+        'qh' could tilt all horizontal quads.
+    angle : float
+        Tilt angle [rad].
+    
+    Returns
+    -------
+    None
+    """
+    for node in lattice.get_nodes_containing(key):
+        node.setTiltAngle(angle)
     
     
-def is_stable(M):
-    """Return True if all eigenvalues lie on the unit circle in the complex
-    plane."""
+def is_stable(M, tol=1e-5):
+    """Determine transfer matrix stability.
+    
+    Parameters
+    ----------
+    M : ndarray, shape (n, n)
+        A transfer matrix.
+    tol : float
+        The matrix is stable if all eigenvalue norms are in the range [1 - tol,
+        1 + tol].
+    
+    Returns
+    -------
+    bool
+    """
     for eigval in la.eigvals(M):
-        if abs(la.norm(eigval) - 1) > 1e-5:
+        if abs(la.norm(eigval) - 1) > tol:
             return False
     return True
     
     
 def get_eigtunes(M):
-    """Compute the eigentunes of the transfer matrix (cos of the real part)."""
+    """Compute transfer matrix eigentunes -- cos(Re[eigenvalue]).
+    
+    Parameters
+    ----------
+    M : ndarray, shape (4, 4)
+        A transfer matrix.
+
+    Returns
+    -------
+    ndarray, shape (2,)
+        Eigentunes for each mode.
+    """
     return np.arccos(la.eigvals(M).real)[[0, 2]]
     
 
 def unequal_eigtunes(M, tol=1e-5):
-    """Return True if the eigentunes of the transfer matrix are the same."""
+    """Return True if the eigentunes of the transfer matrix are the same.
+    
+    Parameters
+    ----------
+    M : ndarray, shape (4, 4)
+        A transfer matrix.
+    tol : float
+        Eigentunes are equal if abs(mu1 - mu2) > tol.
+
+    Returns
+    -------
+    bool
+    """
     mu1, mu2 = get_eigtunes(M)
     return abs(mu1 - mu2) > tol
 
@@ -105,7 +192,7 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
     
     Returns
     -------
-    TEAPOT_Lattice object
+    TEAPOT_Lattice
     """
     angle = np.radians(angle)
 
@@ -185,6 +272,10 @@ def fofo_lattice(ks1, ks2, L, fill_fac, fringe=False):
         The fraction of the lattice occupied by quadrupoles.
     fringe : bool
         Whether to include nonlinear fringe fields in the lattice.
+        
+    Returns
+    -------
+    TEAPOT_Lattice
     """
     lattice = TEAPOT_Lattice()
     drift1 = teapot.DriftTEAPOT('drift1')
@@ -210,7 +301,20 @@ def fofo_lattice(ks1, ks2, L, fill_fac, fringe=False):
     
     
 def transfer_matrix(lattice, mass, energy):
-    """Get transverse linear transfer matrix as NumPy array."""
+    """Shortcut to get transfer matrix from periodic lattice.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        A periodic lattice to track with.
+    mass, energy : float
+        Particle mass [GeV/c^2] and kinetic energy [GeV].
+    
+    Returns
+    -------
+    M : ndarray, shape (4, 4)
+        Transverse transfer matrix.
+    """
     bunch, params_dict = initialize_bunch(mass, energy)
     matrix_lattice = TEAPOT_MATRIX_Lattice(lattice, bunch)
     one_turn_matrix = matrix_lattice.oneTurnMatrix
@@ -222,9 +326,20 @@ def transfer_matrix(lattice, mass, energy):
     
 
 def params_from_transfer_matrix(M):
-    """Return dict of lattice parameters from the transfer matrix.
+    """Return dictionary of lattice parameters from a transfer matrix.
     
-    The method is taken from py/orbit/matrix_lattice/MATRIX_Lattice.py
+    Method is taken from `py/orbit/matrix_lattice/MATRIX_Lattice.py`.
+    
+    Parameters
+    ----------
+    M : ndarray, shape (4, 4)
+        A transfer matrix.
+        
+    Returns
+    -------
+    lattice_params : dict
+        Dictionary with the following keys: 'frac_tune_x', 'frac_tune_y',
+        'alpha_x', 'alpha_y', 'beta_x', 'beta_y', 'gamma_x', 'gamma_y'.
     """
     keys = ['frac_tune_x', 'frac_tune_y', 'alpha_x', 'alpha_y', 'beta_x',
             'beta_y', 'gamma_x', 'gamma_y']
@@ -263,7 +378,20 @@ def params_from_transfer_matrix(M):
     
     
 def twiss_at_injection(lattice, mass, energy):
-    """Get the 2D Twiss parameters at the lattice entrance."""
+    """Get 2D Twiss parameters at lattice entrance.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        A periodic lattice to track with.
+    mass, energy : float
+        Particle mass [GeV/c^2] and kinetic energy [GeV].
+        
+    Returns
+    -------
+    alpha_x, alpha_y, beta_x, beta_y : float
+        2D Twiss parameters at lattice entrance.
+    """
     bunch, params_dict = initialize_bunch(mass, energy)
     matrix_lattice = TEAPOT_MATRIX_Lattice(lattice, bunch)
     _, arrPosAlphaX, arrPosBetaX = matrix_lattice.getRingTwissDataX()
@@ -274,7 +402,20 @@ def twiss_at_injection(lattice, mass, energy):
     
     
 def get_tunes(lattice, mass, energy):
-    """Compute the fractional x and y lattice tunes."""
+    """Compute fractional x and y lattice tunes.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        A periodic lattice to track with.
+    mass, energy : float
+        Particle mass [GeV/c^2] and kinetic energy [GeV].
+        
+    Returns
+    -------
+    ndarray, shape (2,)
+        Array of [nux, nuy].
+    """
     M = transfer_matrix(lattice, mass, energy)
     lattice_params = params_from_transfer_matrix(M)
     nux = lattice_params['frac_tune_x']
@@ -283,16 +424,25 @@ def get_tunes(lattice, mass, energy):
     
     
 def twiss_throughout(lattice, bunch):
-    """Get the Twiss parameters throughout lattice.
+    """Get Twiss parameters throughout lattice.
     
-    Returns: NumPy array
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        A periodic lattice to track with.
+    bunch : Bunch
+        Test bunch to perform tracking.
+    
+    Returns
+    -------
+    ndarray
         Columns are: [s, nux, nuy, alpha_x, alpha_x, beta_x, beta_y]
     """
     # Extract Twiss parameters from one turn transfer matrix
     matrix_lattice = TEAPOT_MATRIX_Lattice(lattice, bunch)
     twiss_x = matrix_lattice.getRingTwissDataX()
     twiss_y = matrix_lattice.getRingTwissDataY()
-    # Unpack and convert to numpy arrays
+    # Unpack and convert to ndarrays
     (nux, alpha_x, beta_x), (nuy, alpha_y, beta_y) = twiss_x, twiss_y
     nux, alpha_x, beta_x = np.array(nux), np.array(alpha_x), np.array(beta_x)
     nuy, alpha_y, beta_y = np.array(nuy), np.array(alpha_y), np.array(beta_y)
@@ -304,13 +454,37 @@ def twiss_throughout(lattice, bunch):
 
     
 def add_node_at_start(lattice, node):
-    """Add node at start of the first node in lattice."""
+    """Add node at entrance of first node in lattice.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        Lattice in which node will be inserted.
+    node : NodeTEAPOT
+        Node to insert.
+        
+    Returns
+    -------
+    None
+    """
     firstnode = lattice.getNodes()[0]
     firstnode.addChildNode(node, firstnode.ENTRANCE)
 
 
 def add_node_at_end(lattice, node):
-    """Add node at end of the last node in lattice."""
+    """Add node at end of the last node in lattice.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        Lattice in which node will be inserted.
+    node : NodeTEAPOT
+        Node to insert.
+        
+    Returns
+    -------
+    None
+    """
     lastnode = lattice.getNodes()[-1]
     lastnode.addChildNode(node, lastnode.EXIT)
 
@@ -318,8 +492,18 @@ def add_node_at_end(lattice, node):
 def add_node_throughout(lattice, new_node, position):
     """Add `new_node` as child of every node in lattice.
     
-    position : str
-        Options are {'start', 'mid', 'end'}.
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        Lattice in which node will be inserted.
+    new_node : NodeTEAPOT
+        Node to insert.
+    position : {'start', 'mid', 'end'}
+        Relative location in the lattice nodes to the new node.
+        
+    Returns
+    -------
+    None
     """
     loc = {
         'start': AccNode.ENTRANCE, 
@@ -331,11 +515,18 @@ def add_node_throughout(lattice, new_node, position):
         
         
 def toggle_spacecharge_nodes(sc_nodes, status='off'):
-    """Turn on(off) the space charge nodes.
+    """Turn on(off) a set of space charge nodes.
     
+    Parameters
+    ----------
     sc_nodes : list
-        The list of space charge nodes. They should be subclasses of
+        List of space charge nodes. They should be subclasses of
         `SC_Base_AccNode`.
+    status : {'on', 'off'}
+        Whether to turn the nodes on or off.
+    Returns
+    -------
+    None
     """
     switch = {'on':True, 'off':False}[status]
     for sc_node in sc_nodes:
@@ -343,7 +534,20 @@ def toggle_spacecharge_nodes(sc_nodes, status='off'):
 
 
 def initialize_bunch(mass, energy):
-    """Create Bunch object with given mass and energy."""
+    """Create and initialize Bunch.
+    
+    Parameters
+    ----------
+    mass, energy : float
+        Mass [GeV/c^2] and kinetic energy [GeV] per bunch particle.
+    
+    Returns
+    -------
+    bunch : Bunch
+        A Bunch object with the given mass and kinetic energy.
+    params_dict : dict
+        Dictionary with reference to Bunch.
+    """
     bunch = Bunch()
     bunch.mass(mass)
     bunch.getSyncParticle().kinEnergy(energy)
@@ -351,80 +555,128 @@ def initialize_bunch(mass, energy):
     return bunch, params_dict
         
     
-def coasting_beaam(
-    nparts,
-    twiss_params, 
-    lattice_length, 
-    mass, 
-    energy,          
-    kind, macrosize=1
-):  
+def coasting_beam(kind, nparts, twiss_params, length, mass, energy, macrosize=0):
+    """Generate bunch with no energy spread and uniform longitudinal density.
+    
+    Parameters
+    ----------
+    kind : {'kv', 'gaussian', 'waterbag'}
+        The kind of distribution.
+    nparts : int
+        Number of macroparticles.
+    twiss_params : (ax, bx, ex, ay, by, ey)
+        2D Twiss parameters (`ax` means 'alpha x' and so on).
+    length : float
+        Bunch length [m].
+    mass, energy : float
+        Mass [GeV/c^2] and kinetic energy [GeV] per particle.
+    macrosize : int
+        Number of real particles represented by each macroparticle. Maybe we
+        should just pass the intensity instead and compute the macrosize
+        internally.
+    
+    Returns
+    -------
+    bunch : Bunch
+        A Bunch object with the specified mass and kinetic energy, filled with
+        particles according to the specified distribution.
+    params_dict : dict
+        Dictionary with reference to Bunch.
+    """
     bunch = Bunch()
     bunch.mass(mass)
     bunch.macroSize(macrosize)
     bunch.getSyncParticle().kinEnergy(energy)
     params_dict = {'bunch': bunch}
-    distributions = {
-        'kv':KVDist2D,
-        'gaussian':GaussDist2D,
-        'waterbag':WaterBagDist2D
-    }
+    constructors = {'kv':KVDist2D,
+                    'gaussian':GaussDist2D,
+                    'waterbag':WaterBagDist2D}
     ax, bx, ex, ay, by, ey = twiss_params
-    dist = distributions[kind](
-        TwissContainer(ax, bx, ex), 
-        TwissContainer(ay, by, ey)
-    )
+    twissX = TwissContainer(ax, bx, ex)
+    twissY = TwissContainer(ay, by, ey)
+    dist_generator = constructors[kind](twissX, twissY)
     for i in range(nparts):
-        x, xp, y, yp = dist.getCoordinates()
-        z = lattice_length * np.random.random()
+        x, xp, y, yp = dist_generator.getCoordinates()
+        z = np.random.uniform(0, length)
         bunch.addParticle(x, xp, y, yp, z, 0.0)
     return bunch, params_dict
                                                                     
     
 def get_coords(bunch, mm_mrad=False):
-    """Extract NumPy array of shape (nparts, 6) from bunch."""
+    """Extract coordinate array from bunch.
+    
+    Parameters
+    ----------
+    bunch : Bunch
+        The bunch to extract the coordinates from.
+    mm_mrad : bool
+        Whether to convert to mm (position) and mrad (slope).
+        
+    Returns
+    -------
+    ndarray, shape (nparts, 6)
+    """
     nparts = bunch.getSize()
     X = np.zeros((nparts, 6))
     for i in range(nparts):
-        X[i] = [bunch.x(i), bunch.xp(i), bunch.y(i), 
-                bunch.yp(i), bunch.z(i), bunch.dE(i)]
+        X[i] = [bunch.x(i), bunch.xp(i), bunch.y(i), bunch.yp(i),
+                bunch.z(i), bunch.dE(i)]
     if mm_mrad:
         X *= 1000.
     return X
     
     
 def dist_to_bunch(X, bunch, length):
-    """Convert the coordinate array `X` to a Bunch object."""
+    """Fill bunch with particles (coasting).
+    
+    Parameters
+    ----------
+    X : ndarray, shape (nparts, 4)
+        Transverse bunch coordinate array.
+    bunch : Bunch
+        The bunch to populate.
+    length : float
+        Bunch length. Axial density is uniform and there is no energy spread.
+    
+    Returns
+    -------
+    bunch : Bunch
+        The modified bunch; don't really need to return this.
+    """
     for (x, xp, y, yp) in X:
-        z = length * np.random.random()
+        z = np.random.uniform(0, length)
         bunch.addParticle(x, xp, y, yp, z, 0.)
     return bunch
     
     
 def track_bunch(bunch, params_dict, lattice, nturns=1, dump_every=0,
                 info='coords', progbar=True):
-    """Track a Bunch through the lattice.
+    """Track a bunch through the lattice.
     
     Parameters
     ----------
-    bunch : Bunch object
+    bunch : Bunch
         The bunch to track.
     params_dict : dict
-        The bunch parameter dictionary.
-    lattice : TEAPOT_Lattice object
-        The lattice to use for tracking.
+        Dictionary with reference to `bunch`.
+    lattice : TEAPOT_Lattice
+        The lattice to track with.
     nturns : int
-        The number of times to track the lattice.
+        Number of times to track track through the lattice.
     dump_every : int
-        Store the bunch info after every `dump_every` turns. If 0, no info is
+        Store bunch info after every `dump_every` turns. If 0, no info is
         stored.
-    info : str
+    info : {'coords', 'cov'}
         If 'coords', the transverse bunch coordinate array is stored. If `cov`,
         the transverse covariance matrix is stored.
+    progbar : bool
+        Whether to show tqdm progress bar.
         
     Returns
     -------
-    NumPy array
+    ndarray, shape (nturns, ?, ?)
+        If tracking coords, shape is (nturns, nparts, 4). If tracking
+        covariance matrix, shape is (nturns, 4, 4)
     """
     info_list = []
     turns = trange(nturns) if progbar else range(nturns)
