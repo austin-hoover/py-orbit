@@ -63,7 +63,6 @@ class TIME_DEP_Lattice(TEAPOT_Lattice):
 		It tracks the bunch through the lattice with multi-turn.
 		"""
 		turns = self.__turns
-		#start
 		for i in range(turns - 1):
 			self.trackBunch(bunch, paramsDict)
 			syncPart = bunch.getSyncParticle()
@@ -79,7 +78,6 @@ class TIME_DEP_Lattice(TEAPOT_Lattice):
 		self.addNode(startNode, startPosition)
 		self.addNode(endNode, endPosition)
 		self.__turns = turns
-		#print self.getNodes()
 
 
 class StartNode(AccNode):
