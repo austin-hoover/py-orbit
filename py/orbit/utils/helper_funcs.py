@@ -556,7 +556,7 @@ def initialize_bunch(mass, energy):
         
     
 def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
-                  kin_energy, intensity=0):
+                  kin_energy, intensity=0, **kws):
     """Generate bunch with no energy spread and uniform longitudinal density.
     
     Parameters
@@ -575,6 +575,8 @@ def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
         Mass [GeV/c^2] and kinetic energy [GeV] per particle.
     intensity : int
         Number of physical particles in the bunch.
+    **kws
+        Key word arguments for the distribution generator.
     
     Returns
     -------
@@ -595,7 +597,7 @@ def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
     (ax, ay, bx, by), (ex, ey) = twiss_params, emittances
     twissX = TwissContainer(ax, bx, ex)
     twissY = TwissContainer(ay, by, ey)
-    dist_generator = constructors[kind](twissX, twissY)
+    dist_generator = constructors[kind](twissX, twissY, **kws)
     for i in range(nparts):
         x, xp, y, yp = dist_generator.getCoordinates()
         z = np.random.uniform(0, length)
