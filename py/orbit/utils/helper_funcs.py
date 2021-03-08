@@ -592,7 +592,7 @@ def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
     constructors = {'kv':KVDist2D,
                     'gaussian':GaussDist2D,
                     'waterbag':WaterBagDist2D}
-    ax, bx, ex, ay, by, ey = twiss_params
+    (ax, ay, bx, by), (ex, ey) = twiss_params, emittances
     twissX = TwissContainer(ax, bx, ex)
     twissY = TwissContainer(ay, by, ey)
     dist_generator = constructors[kind](twissX, twissY)
