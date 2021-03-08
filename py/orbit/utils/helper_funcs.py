@@ -555,7 +555,8 @@ def initialize_bunch(mass, energy):
     return bunch, params_dict
         
     
-def coasting_beam(kind, nparts, twiss_params, length, mass, energy, macrosize=0):
+def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
+                  kin_energy, intensity=0):
     """Generate bunch with no energy spread and uniform longitudinal density.
     
     Parameters
@@ -564,16 +565,16 @@ def coasting_beam(kind, nparts, twiss_params, length, mass, energy, macrosize=0)
         The kind of distribution.
     nparts : int
         Number of macroparticles.
-    twiss_params : (ax, bx, ex, ay, by, ey)
+    twiss_params : (ax, ay, bx, by)
         2D Twiss parameters (`ax` means 'alpha x' and so on).
+    emittances : (ex, ey)
+        Horizontal and vertical r.m.s. emittances.
     length : float
         Bunch length [m].
-    mass, energy : float
+    mass, kin_energy : float
         Mass [GeV/c^2] and kinetic energy [GeV] per particle.
-    macrosize : int
-        Number of real particles represented by each macroparticle. Maybe we
-        should just pass the intensity instead and compute the macrosize
-        internally.
+    intensity : int
+        Number of physical particles in the bunch.
     
     Returns
     -------
@@ -585,8 +586,8 @@ def coasting_beam(kind, nparts, twiss_params, length, mass, energy, macrosize=0)
     """
     bunch = Bunch()
     bunch.mass(mass)
-    bunch.macroSize(macrosize)
-    bunch.getSyncParticle().kinEnergy(energy)
+    bunch.macroSize(int(intensity / length))
+    bunch.getSyncParticle().kinEnergy(kin_energy)
     params_dict = {'bunch': bunch}
     constructors = {'kv':KVDist2D,
                     'gaussian':GaussDist2D,
@@ -647,6 +648,26 @@ def dist_to_bunch(X, bunch, length):
         z = np.random.uniform(0, length)
         bunch.addParticle(x, xp, y, yp, z, 0.)
     return bunch
+    
+    
+def dist_from_bunch(bunch):
+    """Get coordinate array from bunch.
+    
+    Parameters
+    ----------
+    bunch : Bunch
+        Bunch containing `nparts` macroparticles.
+    
+    Returns
+    -------
+    X : ndarray, shape (nparts, 4)
+        The transverse bunch coordinate array.
+    """
+    nparts = bunch.getSize()
+    X = np.zeros((nparts, 4))
+    for i in range(nparts):
+        X[i] = [bunch.x(i), bunch.xp(i), bunch.y(i), bunch.yp(i)]
+    return X
     
     
 def track_bunch(bunch, params_dict, lattice, nturns=1, dump_every=0,
