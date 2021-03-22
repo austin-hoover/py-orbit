@@ -15,7 +15,7 @@ from orbit.teapot_base import MatrixGenerator
 from orbit.matrix_lattice import MATRIX_Lattice
 from orbit.bunch_generators import (
     TwissContainer, WaterBagDist2D, GaussDist2D, KVDist2D)
-from orbit.utils.consts import classical_proton_radius
+from orbit.utils.consts import classical_proton_radius, speed_of_light
 from orbit_utils import Matrix
 
          
@@ -35,27 +35,57 @@ def tprint(string, indent=4):
     """
     print indent*' ' + str(string)
     
-         
-def get_perveance(mass, energy, line_density):
-    """"Return dimensionless beam perveance.
     
-    Parameters
-    ----------
-    mass : float
-        Mass per particle [GeV/c^2].
-    energy : float
-        Kinetic energy per particle [GeV].
-    line_density : float
-        Number density in longitudinal direction [m^-1].
+def step_func(x):
+    "Heaviside step function."
+    return x if x >= 0 else 0
     
-    Returns
-    -------
-    float
-        Dimensionless space charge perveance
+    
+def apply(M, X):
+    """Apply M to each row of X."""
+    return np.apply_along_axis(lambda x: np.matmul(M, x), 1, X)
+
+
+def normalize(X):
+    """Normalize all rows of X to unit length."""
+    return np.apply_along_axis(lambda x: x/la.norm(x), 1, X)
+
+
+def symmetrize(M):
+    """Return a symmetrized version of M.
+    
+    M : A square upper or lower triangular matrix.
     """
-    gamma = 1 + (energy / mass) # Lorentz factor
-    beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
-    return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
+    return M + M.T - np.diag(M.diagonal())
+    
+    
+def rand_rows(X, n):
+    """Return n random elements of X."""
+    Xsamp = np.copy(X)
+    if n < X.shape[0]:
+        idx = np.random.choice(Xsamp.shape[0], n, replace=False)
+        Xsamp = Xsamp[idx]
+    return Xsamp
+    
+    
+def rotation_matrix(phi):
+    """2D rotation matrix (cw)."""
+    C, S = np.cos(phi), np.sin(phi)
+    return np.array([[C, S], [-S, C]])
+
+
+def rotation_matrix_4D(phi):
+    """Rotate [x, x', y, y'] cw in the x-y plane."""
+    C, S = np.cos(phi), np.sin(phi)
+    return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
+
+
+def phase_adv_matrix(mu1, mu2):
+    """Rotate [x, x'] by mu1 and [y, y'] by mu2, both clockwise."""
+    R = np.zeros((4, 4))
+    R[:2, :2] = rotation_matrix(mu1)
+    R[2:, 2:] = rotation_matrix(mu2)
+    return R
     
     
 def lattice_from_file(file, seq='', fringe=False, kind='madx'):
@@ -86,7 +116,35 @@ def lattice_from_file(file, seq='', fringe=False, kind='madx'):
     lattice.set_fringe(fringe)
     return lattice
     
-
+    
+def get_perveance(mass, kin_energy, line_density):
+    """"Compute dimensionless beam perveance.
+    
+    Parameters
+    ----------
+    mass : float
+        Mass per particle [GeV/c^2].
+    kin_energy : float
+        Kinetic energy per particle [GeV].
+    line_density : float
+        Number density in longitudinal direction [m^-1].
+    
+    Returns
+    -------
+    float
+        Dimensionless space charge perveance
+    """
+    gamma = 1 + (kin_energy / mass) # Lorentz factor
+    beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
+    return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
+    
+    
+def get_Brho(mass, kin_energy):
+    """Compute magnetic rigidity (B rho = p / c)."""
+    pc = np.sqrt(kin_energy * (kin_energy + 2 * mass))
+    return 1e9 * (pc / speed_of_light)
+    
+    
 def tilt_elements_containing(lattice, key, angle):
     """Tilt all elements with `key` in their name. Only used this once... may
     delete.
@@ -107,61 +165,6 @@ def tilt_elements_containing(lattice, key, angle):
     """
     for node in lattice.get_nodes_containing(key):
         node.setTiltAngle(angle)
-    
-    
-def is_stable(M, tol=1e-5):
-    """Determine transfer matrix stability.
-    
-    Parameters
-    ----------
-    M : ndarray, shape (n, n)
-        A transfer matrix.
-    tol : float
-        The matrix is stable if all eigenvalue norms are in the range [1 - tol,
-        1 + tol].
-    
-    Returns
-    -------
-    bool
-    """
-    for eigval in la.eigvals(M):
-        if abs(la.norm(eigval) - 1) > tol:
-            return False
-    return True
-    
-    
-def get_eigtunes(M):
-    """Compute transfer matrix eigentunes -- cos(Re[eigenvalue]).
-    
-    Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-
-    Returns
-    -------
-    ndarray, shape (2,)
-        Eigentunes for each mode.
-    """
-    return np.arccos(la.eigvals(M).real)[[0, 2]]
-    
-
-def unequal_eigtunes(M, tol=1e-5):
-    """Return True if the eigentunes of the transfer matrix are the same.
-    
-    Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-    tol : float
-        Eigentunes are equal if abs(mu1 - mu2) > tol.
-
-    Returns
-    -------
-    bool
-    """
-    mu1, mu2 = get_eigtunes(M)
-    return abs(mu1 - mu2) > tol
 
 
 def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
@@ -512,6 +515,61 @@ def add_node_throughout(lattice, new_node, position):
     }
     for node in lattice.getNodes():
         node.addChildNode(new_node, loc[position], 0, AccNode.BEFORE)
+        
+        
+def is_stable(M, tol=1e-5):
+    """Determine transfer matrix stability.
+    
+    Parameters
+    ----------
+    M : ndarray, shape (n, n)
+        A transfer matrix.
+    tol : float
+        The matrix is stable if all eigenvalue norms are in the range [1 - tol,
+        1 + tol].
+    
+    Returns
+    -------
+    bool
+    """
+    for eigval in la.eigvals(M):
+        if abs(la.norm(eigval) - 1) > tol:
+            return False
+    return True
+    
+    
+def get_eigtunes(M):
+    """Compute transfer matrix eigentunes -- cos(Re[eigenvalue]).
+    
+    Parameters
+    ----------
+    M : ndarray, shape (4, 4)
+        A transfer matrix.
+
+    Returns
+    -------
+    ndarray, shape (2,)
+        Eigentunes for each mode.
+    """
+    return np.arccos(la.eigvals(M).real)[[0, 2]]
+    
+
+def unequal_eigtunes(M, tol=1e-5):
+    """Return True if the eigentunes of the transfer matrix are the same.
+    
+    Parameters
+    ----------
+    M : ndarray, shape (4, 4)
+        A transfer matrix.
+    tol : float
+        Eigentunes are equal if abs(mu1 - mu2) > tol.
+
+    Returns
+    -------
+    bool
+    """
+    mu1, mu2 = get_eigtunes(M)
+    return abs(mu1 - mu2) > tol
         
         
 def toggle_spacecharge_nodes(sc_nodes, status='off'):

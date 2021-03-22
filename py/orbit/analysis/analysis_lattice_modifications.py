@@ -12,7 +12,7 @@ from orbit.lattice import (
     AccNodeBunchTracker)
 from orbit.teapot import DriftTEAPOT
 from orbit.utils import orbitFinalize
-from orbit.analysis import AnalysisNode
+from orbit.analysis import AnalysisNode, WireScannerNode
 
 
 def idx_pos_list(nodes, min_sep=1e-5):
@@ -49,8 +49,9 @@ def add_analysis_nodes(lattice, kind='env_monitor', min_sep=1e-5):
     nodes, analysis_nodes = lattice.getNodes(), []
     if len(nodes) == 0:
         return
+        
     def add_analysis_node(parent_node, idx, position):
-        name = ''.join([parent_node.getName(), ':', kind, '_monitor_', str(idx)])
+        name = ''.join([parent_node.getName(), ':', kind, str(idx)])
         analysis_node = AnalysisNode(position, kind, name)
         tilt_angle = parent_node.getAllChildren()[0].getTiltAngle()
         analysis_node.setTiltAngle(-tilt_angle)
@@ -67,3 +68,20 @@ def add_analysis_nodes(lattice, kind='env_monitor', min_sep=1e-5):
     analysis_node = add_analysis_node(last_node, -1, last_position)
     analysis_nodes.append(analysis_node)
     return analysis_nodes
+
+
+def add_analysis_node(lattice, parent_node_name, kind, mm_mrad=False):
+    """Add analysis node as child of existing node in lattice."""
+    parent_node = lattice.getNodeForName(parent_node_name)
+    position = lattice.getNodePositionsDict()[parent_node][0]
+    analysis_node = AnalysisNode(position, kind, mm_mrad=mm_mrad)
+    parent_node.addChildNode(analysis_node, parent_node.ENTRANCE)
+    return analysis_node
+    
+    
+def add_ws_node(lattice, parent_node_name, nbins, diag_wire_angle):
+    """Add analysis node as child of existing node in lattice."""
+    parent_node = lattice.getNodeForName(parent_node_name)
+    ws_node = WireScannerNode(nbins, diag_wire_angle)
+    parent_node.addChildNode(ws_node, parent_node.ENTRANCE)
+    return ws_node

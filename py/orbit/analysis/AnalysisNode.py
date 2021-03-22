@@ -10,6 +10,7 @@ from orbit.analysis import Stats
 from orbit.lattice import AccNode, AccActionsContainer, AccNodeBunchTracker
 from orbit.teapot import DriftTEAPOT
 from orbit.utils import orbitFinalize, NamedObject, ParamsDictObject
+from orbit.utils import helper_funcs as hf
 
 
 def get_coords(bunch, mm_mrad=False):
@@ -40,7 +41,7 @@ class AnalysisNode(DriftTEAPOT):
     The beam parameters could be the coordinate array, twiss parameters,
     moments, or envelope parameters. The node stores a list of these
     parameters and appends to the list each time `track` is called.
-    
+        
     Attributes
     ----------
     position : float
@@ -144,15 +145,49 @@ def clear_analysis_nodes_data(analysis_nodes):
 
 
 class WireScannerNode(DriftTEAPOT):
-    """Simple node to measure <x^2>, <y^2>, and <xy>.
+    """Node to measure simulate wire-scanner measurement.
+    
+    Note that tracking overwrites any previous scans.
     
     To do: add measurement error.
     """
-    def __init__(self, name='ws'):
+    def __init__(self, nbins=50, diag_wire_angle=None, name='ws'):
         DriftTEAPOT.__init__(self, name)
-        self.x2 = self.y2 = self.xy = 0.0
-
+        self.nbins = 50
+        if not diag_wire_angle:
+            diag_wire_angle = np.radians(45.0)
+        self.diag_wire_angle = diag_wire_angle
+        self.hist, self.pos = {}, {}
+        
     def track(self, params_dict):
+        """Track and compute histograms."""
         X = get_coords(params_dict['bunch'])
-        Sigma = np.cov(X.T)
-        self.x2, self.y2, self.xy = Sigma[0, 0], Sigma[2, 2], Sigma[0, 2]
+        X_rot = hf.apply(hf.rotation_matrix_4D(self.diag_wire_angle), X)
+        self.hist['x'], bin_edges_x = np.histogram(X[:, 0], self.nbins)
+        self.hist['y'], bin_edges_y = np.histogram(X[:, 2], self.nbins)
+        self.hist['u'], bin_edges_u = np.histogram(X_rot[:, 0], self.nbins)
+        
+        def get_bin_centers(bin_edges):
+            delta = bin_edges[1] - bin_edges[0]
+            return (bin_edges + 0.5 * delta)[:-1]
+            
+        self.pos['x'] = get_bin_centers(bin_edges_x)
+        self.pos['y'] = get_bin_centers(bin_edges_y)
+        self.pos['u'] = get_bin_centers(bin_edges_u)
+
+    def estimate_variance(self, dim='x'):
+        """Estimate variance from histogram."""
+        counts, positions = self.hist[dim], self.pos[dim]
+        N = np.sum(counts)
+        x_avg = np.sum(counts * positions) / (N - 1)
+        x2_avg = np.sum(counts * positions**2) / (N - 1)
+        return x2_avg - x_avg**2
+        
+    def get_moments(self):
+        """Get xx, yy, and xy covariances from histograms."""
+        sig_xx = self.estimate_variance('x')
+        sig_yy = self.estimate_variance('y')
+        sig_uu = self.estimate_variance('u')
+        sin, cos = np.sin(self.diag_wire_angle), np.cos(self.diag_wire_angle)
+        sig_xy = (sig_uu - sig_xx*cos**2 - sig_yy*sin**2) / (2 * sin * cos)
+        return sig_xx, sig_yy, sig_xy
