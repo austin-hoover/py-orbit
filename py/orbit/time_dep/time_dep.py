@@ -8,7 +8,7 @@ import math
 from orbit.teapot import TEAPOT_Lattice
 from orbit.parsers.mad_parser import MAD_Parser, MAD_LattLine
 from orbit.lattice import AccNode, AccActionsContainer
-from orbit.time_dep import waveform
+from orbit.time_dep import waveforms
 
 
 class TIME_DEP_Lattice(TEAPOT_Lattice):
