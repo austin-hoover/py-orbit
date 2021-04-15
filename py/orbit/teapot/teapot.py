@@ -1244,7 +1244,7 @@ class KickTEAPOT(NodeTEAPOT):
 		"""
 		Constructor. Creates the Kick TEAPOT element .
 		"""
-		NodeTEAPOT.__init__(self,name)
+		NodeTEAPOT.__init__(self, name)
 		self.addParam("kx",0.)
 		self.addParam("ky",0.)
 		self.addParam("dE",0.)
@@ -1285,24 +1285,23 @@ class KickTEAPOT(NodeTEAPOT):
 		nParts = self.getnParts()
 		index = self.getActivePartIndex()
 		length = self.getLength(index)
-		strength = 1.0
-		if(self.waveform):
-			strength = self.waveform.getKickFactor()
-		kx = strength * self.getParam("kx")/(nParts-1)
-		ky = strength * self.getParam("ky")/(nParts-1)
-		dE = self.getParam("dE")/(nParts-1)
+		amplitude = self.waveform.getAmplitude() if self.waveform else 1.0
+		kx = amplitude * self.getParam("kx") / (nParts - 1)
+		ky = amplitude * self.getParam("ky") / (nParts - 1)
+		dE = self.getParam("dE") / (nParts - 1)
 		bunch = paramsDict["bunch"]
 		useCharge = 1
-		if(paramsDict.has_key("useCharge")): useCharge = paramsDict["useCharge"]
-		if(index == 0):
+		if paramsDict.has_key("useCharge"): 
+			useCharge = paramsDict["useCharge"]
+		if index == 0:
 			TPB.drift(bunch, length)
-			TPB.kick(bunch,kx,ky,dE,useCharge)
+			TPB.kick(bunch, kx, ky, dE, useCharge)
 			return
-		if(index > 0 and index < (nParts-1)):
+		if index > 0 and index < nParts - 1:
 			TPB.drift(bunch, length)
-			TPB.kick(bunch,kx,ky,dE,useCharge)
+			TPB.kick(bunch, kx, ky, dE, useCharge)
 			return
-		if(index == (nParts-1)):
+		if index == nParts - 1:
 			TPB.drift(bunch, length)
 		return
 
