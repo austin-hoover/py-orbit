@@ -37,6 +37,3 @@ class TeapotInjectionNode(DriftTEAPOT):
 		"""
 		length = self.getLength(self.getActivePartIndex())
 		self.injectparts.addParticles()		
-
-	def setnparts(self, nparts):
-		self.injectparts.setnparts(nparts)
