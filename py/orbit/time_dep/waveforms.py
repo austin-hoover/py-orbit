@@ -18,11 +18,11 @@ class LinearWaveform:
         self.syncpart = syncpart
         self.t1, self.t2, self.amp1, self.amp2 = t1, t2, amp1, amp2
 
-    def getAmpltidue(self):
+    def getAmplitude(self):
         t = self.syncpart.time()
         if t < self.t1:
             amp = self.amp1
-        elif t > self.tf:
+        elif t > self.t2:
             amp = self.amp2
         else:
             dt = (time - self.t1) / (self.t2 - self.t1)
@@ -37,11 +37,11 @@ class SquareRootWaveform:
         self.syncpart = syncpart
         self.t1, self.t2, self.amp1, self.amp2 = t1, t2, amp1, amp2
 
-    def getAmpltidue(self):
+    def getAmplitude(self):
         t = self.syncpart.time()
         if t < self.t1:
             amp = self.amp1
-        elif t > self.tf:
+        elif t > self.t2:
             amp = self.amp2
         else:
             dt = math.sqrt((t - self.t1) / (self.t2 - self.t1))

@@ -45,10 +45,10 @@ class TIME_DEP_Lattice(TEAPOT_Lattice):
         """Set the waveform function to the TP node before track."""
         flag = 0
         for node in self.getNodes():
-                if TPName == node.getParam("TPName"):
-                    flag = 1
-                    node.setWaveform(waveform)
-                    self.__TDNodeDict[TPName] = node
+            if TPName == node.getParam("TPName"):
+                flag = 1
+                node.setWaveform(waveform)
+                self.__TDNodeDict[TPName] = node
         if not flag:
             print "{} is not found.".format(TPName)
             sys.exit(1)
