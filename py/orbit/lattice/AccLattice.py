@@ -243,7 +243,7 @@ class AccLattice(NamedObject, TypedObject):
         for node in self.getNodes():
             node_length = node.getLength()
             if node_length > max_node_length:
-                node.setnParts(1 + int(node_length / max_node_length))
+                node.setnParts(int(node_length / max_node_length))
                 
     def has_tilted_elements(self):
         """"Return True if there are any tilted elements in the lattice."""
