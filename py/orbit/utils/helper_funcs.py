@@ -731,7 +731,7 @@ def dist_from_bunch(bunch):
     
     
 def track_bunch(bunch, params_dict, lattice, nturns=1, meas_every=0,
-                info='coords', progbar=True):
+                info='coords', progbar=True, mm_mrad=True):
     """Track a bunch through the lattice.
     
     Parameters
@@ -752,6 +752,8 @@ def track_bunch(bunch, params_dict, lattice, nturns=1, meas_every=0,
         the transverse covariance matrix is stored.
     progbar : bool
         Whether to show tqdm progress bar.
+    mm_mrad : bool
+        Whether to convert from m-rad to mm-mrad.
         
     Returns
     -------
@@ -763,7 +765,7 @@ def track_bunch(bunch, params_dict, lattice, nturns=1, meas_every=0,
     turns = trange(nturns) if progbar else range(nturns)
     for turn in turns:
         if meas_every > 0 and turn % meas_every == 0:
-            X = get_coords(bunch, mm_mrad=True)
+            X = get_coords(bunch, mm_mrad=mm_mrad)
             if info == 'coords':
                 info_list.append(X)
             elif info == 'cov':
