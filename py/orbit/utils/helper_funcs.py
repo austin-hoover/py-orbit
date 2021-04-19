@@ -730,7 +730,7 @@ def dist_from_bunch(bunch):
     return X
     
     
-def track_bunch(bunch, params_dict, lattice, nturns=1, dump_every=0,
+def track_bunch(bunch, params_dict, lattice, nturns=1, meas_every=0,
                 info='coords', progbar=True):
     """Track a bunch through the lattice.
     
@@ -744,7 +744,7 @@ def track_bunch(bunch, params_dict, lattice, nturns=1, dump_every=0,
         The lattice to track with.
     nturns : int
         Number of times to track track through the lattice.
-    dump_every : int
+    meas_every : int
         Store bunch info after every `dump_every` turns. If 0, no info is
         stored.
     info : {'coords', 'cov'}
@@ -762,7 +762,7 @@ def track_bunch(bunch, params_dict, lattice, nturns=1, dump_every=0,
     info_list = []
     turns = trange(nturns) if progbar else range(nturns)
     for turn in turns:
-        if dump_every > 0 and turn % dump_every == 0:
+        if meas_every > 0 and turn % meas_every == 0:
             X = get_coords(bunch, mm_mrad=True)
             if info == 'coords':
                 info_list.append(X)
