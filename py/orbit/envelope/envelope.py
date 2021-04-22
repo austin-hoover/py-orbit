@@ -720,7 +720,7 @@ class Envelope:
             p = get_avg_p()
             self.fit_twiss4D(p)
             cost = self._mismatch_error(lattice, ssq=True)
-            cost_reduction = cost - old_cost
+            cost_reduction = old_cost - cost
             step_norm = la.norm(p - old_p)
             converged, message = is_converged(cost, cost_reduction,
                                               step_norm, p)
