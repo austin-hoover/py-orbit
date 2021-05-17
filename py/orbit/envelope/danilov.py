@@ -44,6 +44,12 @@ class DanilovEnvelope:
     
     Attributes
     ----------
+    params : ndarray, shape (8,)
+        The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
+        of a particle on the beam envelope are parameterized as
+            x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
+            y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
+        where 0 <= psi <= 2pi.
     eps : float
         The nonzero rms intrinsic emittance of the beam (eps_1 or eps_2) [m*rad].
     mode : int
@@ -61,12 +67,6 @@ class DanilovEnvelope:
         Bunch length [m].
     perveance : float
         Dimensionless beam perveance.
-    params : list, optional
-        The envelope parameters [a, b, a', b', e, f, e', f']. The coordinates
-        of a particle on the beam envelope are parameterized as
-            x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
-            y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
-        where 0 <= psi <= 2pi.
     """
     def __init__(self, eps=1., mode=1, eps_x_frac=0.5, mass=mass_proton,
                  kin_energy=1.0, length=1.0, intensity=0.0, params=None):
@@ -77,18 +77,18 @@ class DanilovEnvelope:
         self.kin_energy = kin_energy
         self.length = length
         self.set_intensity(intensity)
-        if params is not None:
-            self.params = np.array(params)
-            ex, ey = self.apparent_emittances()
-            self.eps = ex + ey
-            self.eps_x_frac = ex / self.eps
-        else:
-            ex, ey = eps_x_frac * eps, (1 - eps_x_frac) * eps
-            rx, ry = np.sqrt(4 * ex), np.sqrt(4 * ey)
+        if params is None:
+            eps_x, eps_y = eps_x_frac * eps, (1 - eps_x_frac) * eps
+            rx, ry = np.sqrt(4 * eps_x), np.sqrt(4 * eps_y)
             if mode == 1:
                 self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
             elif mode == 2:
                 self.params = np.array([rx, 0, 0, rx, 0, +ry, -ry, 0])
+        else:
+            self.params = np.array(params)
+            eps_x, eps_y = self.apparent_emittances()
+            self.eps = eps_x + eps_y
+            self.eps_x_frac = eps_x / self.eps
         
     def copy(self):
         """Produced a deep copy of the envelope."""
