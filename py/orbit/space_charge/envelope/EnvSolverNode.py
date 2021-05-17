@@ -3,9 +3,8 @@ from orbit.space_charge.scAccNodes import SC_Base_AccNode
 from orbit.utils import orbitFinalize
 
 class EnvSolverNode(SC_Base_AccNode):
-    
+    """Class implementation of envelope solver node."""
     def __init__(self, sc_calculator, name='envsolver'):
-        """Class implementation of envelope solver node."""
         SC_Base_AccNode.__init__(self, sc_calculator, name)
         self.setType('envsolver')
         self.sc_calculator = sc_calculator

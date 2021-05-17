@@ -1,93 +1,24 @@
 """
 This module contains functions for use in PyORBIT scripts.
 """
-
-# Third party
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
 from tqdm import trange
-# PyORBIT
+
 from bunch import Bunch
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.teapot_base import MatrixGenerator
 from orbit.matrix_lattice import MATRIX_Lattice
-from orbit.bunch_generators import (
-    TwissContainer, WaterBagDist2D, GaussDist2D, KVDist2D)
+from orbit.bunch_generators import TwissContainer
+from orbit.bunch_generators import WaterBagDist2D
+from orbit.bunch_generators import GaussDist2D
+from orbit.bunch_generators import KVDist2D
 from orbit.utils.consts import classical_proton_radius, speed_of_light
 from orbit_utils import Matrix
 
-         
-def tprint(string, indent=4):
-    """Print with indent.
-    
-    Parameters
-    ----------
-    string : str
-        String to print.
-    indent : int
-        Number of spaces of indent.
-    
-    Returns
-    -------
-    None
-    """
-    print indent*' ' + str(string)
-    
-    
-def step_func(x):
-    "Heaviside step function."
-    return x if x >= 0 else 0
-    
-    
-def apply(M, X):
-    """Apply M to each row of X."""
-    return np.apply_along_axis(lambda x: np.matmul(M, x), 1, X)
-
-
-def normalize(X):
-    """Normalize all rows of X to unit length."""
-    return np.apply_along_axis(lambda x: x/la.norm(x), 1, X)
-
-
-def symmetrize(M):
-    """Return a symmetrized version of M.
-    
-    M : A square upper or lower triangular matrix.
-    """
-    return M + M.T - np.diag(M.diagonal())
-    
-    
-def rand_rows(X, n):
-    """Return n random elements of X."""
-    Xsamp = np.copy(X)
-    if n < X.shape[0]:
-        idx = np.random.choice(Xsamp.shape[0], n, replace=False)
-        Xsamp = Xsamp[idx]
-    return Xsamp
-    
-    
-def rotation_matrix(phi):
-    """2D rotation matrix (cw)."""
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, S], [-S, C]])
-
-
-def rotation_matrix_4D(phi):
-    """Rotate [x, x', y, y'] cw in the x-y plane."""
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, 0, S, 0], [0, C, 0, S], [-S, 0, C, 0], [0, -S, 0, C]])
-
-
-def phase_adv_matrix(mu1, mu2):
-    """Rotate [x, x'] by mu1 and [y, y'] by mu2, both clockwise."""
-    R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(mu1)
-    R[2:, 2:] = rotation_matrix(mu2)
-    return R
-    
-    
+             
 def lattice_from_file(file, seq='', fringe=False, kind='madx'):
     """Shortcut to create TEAPOT_Lattice from MAD or MADX file.
     
@@ -140,31 +71,30 @@ def get_perveance(mass, kin_energy, line_density):
     
     
 def get_Brho(mass, kin_energy):
-    """Compute magnetic rigidity (B rho = p / c)."""
-    pc = np.sqrt(kin_energy * (kin_energy + 2 * mass))
-    return 1e9 * (pc / speed_of_light)
-    
-    
-def tilt_elements_containing(lattice, key, angle):
-    """Tilt all elements with `key` in their name. Only used this once... may
-    delete.
+    """Compute magnetic rigidity [T * m]/
     
     Parameters
     ----------
-    lattice : TEAPOT_Lattice
-        The lattice containing the elements.
-    key : str
-        Key word which contained in element names to be tilted. For example:
-        'qh' could tilt all horizontal quads.
-    angle : float
-        Tilt angle [rad].
-    
-    Returns
-    -------
-    None
+    mass : float
+        Particle mass [GeV/c^2].
+    kin_energy : float
+        Particle kinetic energy [GeV].
     """
-    for node in lattice.get_nodes_containing(key):
-        node.setTiltAngle(angle)
+    pc = get_pc(mass, kin_energy)
+    return 1e9 * (pc / speed_of_light)
+    
+    
+def get_pc(mass, kin_energy):
+    """Return momentum * speed_of_light [GeV].
+    
+    Parameters
+    ----------
+    mass : float
+        Particle mass [GeV/c^2].
+    kin_energy : float
+        Particle kinetic energy [GeV].
+    """
+    return np.sqrt(kin_energy * (kin_energy + 2 * mass))
 
 
 def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
@@ -262,47 +192,6 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
     return fodo(k1, k2)
     
     
-def fofo_lattice(ks1, ks2, L, fill_fac, fringe=False):
-    """Create O-F-O-O-F-O solenoid lattice.
-    
-    Parameters
-    ----------
-    ks1{2}: float
-        The field strength of the 1st{2nd} solenoid.
-    L : float
-        The length of the lattice.
-    fill_fac : float
-        The fraction of the lattice occupied by quadrupoles.
-    fringe : bool
-        Whether to include nonlinear fringe fields in the lattice.
-        
-    Returns
-    -------
-    TEAPOT_Lattice
-    """
-    lattice = TEAPOT_Lattice()
-    drift1 = teapot.DriftTEAPOT('drift1')
-    drift2 = teapot.DriftTEAPOT('drift2')
-    drift3 = teapot.DriftTEAPOT('drift3')
-    sol1 = teapot.SolenoidTEAPOT('sol1')
-    sol2 = teapot.SolenoidTEAPOT('sol2')
-    sol1.addParam('B', ks1)
-    sol2.addParam('B', ks2)
-    drift1.setLength(L * (1 - fill_fac) / 4)
-    drift2.setLength(L * (1 - fill_fac) / 2)
-    drift3.setLength(L * (1 - fill_fac) / 4)
-    sol1.setLength(L * fill_fac / 2)
-    sol2.setLength(L * fill_fac / 2)
-    lattice.addNode(drift1)
-    lattice.addNode(sol1)
-    lattice.addNode(drift2)
-    lattice.addNode(sol2)
-    lattice.addNode(drift3)
-    lattice.set_fringe(fringe)
-    lattice.initialize()
-    return lattice
-    
-    
 def transfer_matrix(lattice, mass, energy):
     """Shortcut to get transfer matrix from periodic lattice.
     
@@ -327,58 +216,6 @@ def transfer_matrix(lattice, mass, energy):
             M[i, j] = one_turn_matrix.get(i, j)
     return M
     
-
-def params_from_transfer_matrix(M):
-    """Return dictionary of lattice parameters from a transfer matrix.
-    
-    Method is taken from `py/orbit/matrix_lattice/MATRIX_Lattice.py`.
-    
-    Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-        
-    Returns
-    -------
-    lattice_params : dict
-        Dictionary with the following keys: 'frac_tune_x', 'frac_tune_y',
-        'alpha_x', 'alpha_y', 'beta_x', 'beta_y', 'gamma_x', 'gamma_y'.
-    """
-    keys = ['frac_tune_x', 'frac_tune_y', 'alpha_x', 'alpha_y', 'beta_x',
-            'beta_y', 'gamma_x', 'gamma_y']
-    lattice_params = {key: None for key in keys}
-    
-    cos_phi_x = (M[0, 0] + M[1, 1]) / 2
-    cos_phi_y = (M[2, 2] + M[3, 3]) / 2
-    if abs(cos_phi_x) >= 1 or abs(cos_phi_y) >= 1 :
-        return lattice_params
-    sign_x = sign_y = +1
-    if abs(M[0, 1]) != 0:
-        sign_x = M[0, 1] / abs(M[0, 1])
-    if abs(M[2, 3]) != 0:
-        sign_y = M[2, 3] / abs(M[2, 3])
-    sin_phi_x = sign_x * np.sqrt(1 - cos_phi_x**2)
-    sin_phi_y = sign_y * np.sqrt(1 - cos_phi_y**2)
-    
-    nux = sign_x * np.arccos(cos_phi_x) / (2 * np.pi)
-    nuy = sign_y * np.arccos(cos_phi_y) / (2 * np.pi)
-    beta_x = M[0, 1] / sin_phi_x
-    beta_y = M[2, 3] / sin_phi_y
-    alpha_x = (M[0, 0] - M[1, 1]) / (2 * sin_phi_x)
-    alpha_y = (M[2, 2] - M[3, 3]) / (2 * sin_phi_y)
-    gamma_x = -M[1, 0] / sin_phi_x
-    gamma_y = -M[3, 2] / sin_phi_y
-    
-    lattice_params['frac_tune_x'] = nux
-    lattice_params['frac_tune_y'] = nuy
-    lattice_params['beta_x'] = beta_x
-    lattice_params['beta_y'] = beta_y
-    lattice_params['alpha_x'] = alpha_x
-    lattice_params['alpha_y'] = alpha_y
-    lattice_params['gamma_x'] = gamma_x
-    lattice_params['gamma_y'] = gamma_y
-    return lattice_params
-    
     
 def twiss_at_injection(lattice, mass, energy):
     """Get 2D Twiss parameters at lattice entrance.
@@ -402,28 +239,6 @@ def twiss_at_injection(lattice, mass, energy):
     alpha_x, alpha_y = arrPosAlphaX[0][1], arrPosAlphaY[0][1]
     beta_x, beta_y = arrPosBetaX[0][1], arrPosBetaY[0][1]
     return alpha_x, alpha_y, beta_x, beta_y
-    
-    
-def get_tunes(lattice, mass, energy):
-    """Compute fractional x and y lattice tunes.
-    
-    Parameters
-    ----------
-    lattice : TEAPOT_Lattice
-        A periodic lattice to track with.
-    mass, energy : float
-        Particle mass [GeV/c^2] and kinetic energy [GeV].
-        
-    Returns
-    -------
-    ndarray, shape (2,)
-        Array of [nux, nuy].
-    """
-    M = transfer_matrix(lattice, mass, energy)
-    lattice_params = params_from_transfer_matrix(M)
-    nux = lattice_params['frac_tune_x']
-    nuy = lattice_params['frac_tune_y']
-    return np.array([nux, nuy])
     
     
 def twiss_throughout(lattice, bunch):
@@ -454,40 +269,38 @@ def twiss_throughout(lattice, bunch):
     nux, alpha_x, beta_x = nux[:, 1], alpha_x[:, 1], beta_x[:, 1]
     nuy, alpha_y, beta_y = nuy[:, 1], alpha_y[:, 1], beta_y[:, 1]
     return np.vstack([s, nux, nuy, alpha_x, alpha_y, beta_x, beta_y]).T
-
     
-def add_node_at_start(lattice, node):
-    """Add node at entrance of first node in lattice.
+    
+def get_tunes(lattice, mass, energy):
+    """Compute fractional x and y lattice tunes.
     
     Parameters
     ----------
     lattice : TEAPOT_Lattice
-        Lattice in which node will be inserted.
-    node : NodeTEAPOT
-        Node to insert.
+        A periodic lattice to track with.
+    mass, energy : float
+        Particle mass [GeV/c^2] and kinetic energy [GeV].
         
     Returns
     -------
-    None
+    ndarray, shape (2,)
+        Array of [nux, nuy].
     """
+    M = transfer_matrix(lattice, mass, energy)
+    lattice_params = params_from_transfer_matrix(M)
+    nux = lattice_params['frac_tune_x']
+    nuy = lattice_params['frac_tune_y']
+    return np.array([nux, nuy])
+
+    
+def add_node_at_start(lattice, new_node):
+    """Add node as child at entrance of first node in lattice."""
     firstnode = lattice.getNodes()[0]
-    firstnode.addChildNode(node, firstnode.ENTRANCE)
+    firstnode.addChildNode(new_node, firstnode.ENTRANCE)
 
 
-def add_node_at_end(lattice, node):
-    """Add node at end of the last node in lattice.
-    
-    Parameters
-    ----------
-    lattice : TEAPOT_Lattice
-        Lattice in which node will be inserted.
-    node : NodeTEAPOT
-        Node to insert.
-        
-    Returns
-    -------
-    None
-    """
+def add_node_at_end(lattice, new_node):
+    """Add node as child at end of last node in lattice."""
     lastnode = lattice.getNodes()[-1]
     lastnode.addChildNode(node, lastnode.EXIT)
 
@@ -508,68 +321,43 @@ def add_node_throughout(lattice, new_node, position):
     -------
     None
     """
-    loc = {
-        'start': AccNode.ENTRANCE, 
-        'mid': AccNode.BODY, 
-        'end': AccNode.EXIT
-    }
+    loc = {'start': AccNode.ENTRANCE, 
+           'mid': AccNode.BODY, 
+           'end': AccNode.EXIT}
+    
     for node in lattice.getNodes():
         node.addChildNode(new_node, loc[position], 0, AccNode.BEFORE)
         
         
-def is_stable(M, tol=1e-5):
-    """Determine transfer matrix stability.
+def get_sublattice(lattice, start_node_name=None, stop_node_name=None):
+    """Return sublattice from `start_node_name` through `stop_node_name`.
     
     Parameters
     ----------
-    M : ndarray, shape (n, n)
-        A transfer matrix.
-    tol : float
-        The matrix is stable if all eigenvalue norms are in the range [1 - tol,
-        1 + tol].
-    
+    lattice : TEAPOT_Lattice
+        The original lattice from which to create the sublattice.
+    start_node_name, stop_node_name : str
+        Names of the nodes in the original lattice to use as the first and
+        last node in the sublattice. 
+        
     Returns
     -------
-    bool
+    TEAPOT_Lattice
+        New lattice consisting of the specified region of the original lattice.
+        Note that it is not a copy; changes to the nodes in the new lattice 
+        affect the nodes in the original lattice.
     """
-    for eigval in la.eigvals(M):
-        if abs(la.norm(eigval) - 1) > tol:
-            return False
-    return True
-    
-    
-def get_eigtunes(M):
-    """Compute transfer matrix eigentunes -- cos(Re[eigenvalue]).
-    
-    Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-
-    Returns
-    -------
-    ndarray, shape (2,)
-        Eigentunes for each mode.
-    """
-    return np.arccos(la.eigvals(M).real)[[0, 2]]
-    
-
-def unequal_eigtunes(M, tol=1e-5):
-    """Return True if the eigentunes of the transfer matrix are the same.
-    
-    Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-    tol : float
-        Eigentunes are equal if abs(mu1 - mu2) > tol.
-
-    Returns
-    -------
-    bool
-    """
-    mu1, mu2 = get_eigtunes(M)
-    return abs(mu1 - mu2) > tol
+    if start_node_name is None:
+        start_index = 0
+    else:
+        start_node = lattice.getNodeForName(start_node_name)
+        start_index = lattice.getNodeIndex(start_node)
+    if stop_node_name is None:
+        stop_index = -1
+    else:
+        stop_node = lattice.getNodeForName(stop_node_name)
+        stop_index = lattice.getNodeIndex(stop_node)
+    return lattice.getSubLattice(start_index, stop_index)
         
         
 def toggle_spacecharge_nodes(sc_nodes, status='off'):
@@ -687,8 +475,8 @@ def get_coords(bunch, mm_mrad=False):
     return X
     
     
-def dist_to_bunch(X, bunch, length):
-    """Fill bunch with particles (coasting).
+def dist_to_bunch(X, bunch, length, deltaE=0.0):
+    """Fill bunch with particles.
     
     Parameters
     ----------
@@ -697,7 +485,9 @@ def dist_to_bunch(X, bunch, length):
     bunch : Bunch
         The bunch to populate.
     length : float
-        Bunch length. Axial density is uniform and there is no energy spread.
+        Bunch length. Longitudinal density is uniform.
+    deltaE : float
+        RMS energy spread in the bunch.
     
     Returns
     -------
@@ -706,7 +496,8 @@ def dist_to_bunch(X, bunch, length):
     """
     for (x, xp, y, yp) in X:
         z = np.random.uniform(0, length)
-        bunch.addParticle(x, xp, y, yp, z, 0.)
+        dE = np.random.normal(scale=deltaE)
+        bunch.addParticle(x, xp, y, yp, z, dE)
     return bunch
     
     

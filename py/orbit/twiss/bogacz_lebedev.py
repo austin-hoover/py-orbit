@@ -1,30 +1,24 @@
 """
-This module contains functions related to the coupling parameterization of
-Bogacz and Lebedev.
+This module contains functions related to the parameterization of coupled
+motion developed by Lebedev and Bogacz.
 
 Reference: https://iopscience.iop.org/article/10.1088/1748-0221/5/10/P10010
 """
-
 import numpy as np
 import numpy.linalg as la
 
+
+# 4x4 nonsingular, skew-symmetric matrix. A matrix M is symplectic if 
+# M^T U M = U.
 U = np.array([[0, 1, 0, 0], [-1, 0, 0, 0], [0, 0, 0, 1], [0, 0, -1, 0]])
 
-
-def rotation_matrix(phi):
-    C, S = np.cos(phi), np.sin(phi)
-    return np.array([[C, S], [-S, C]])
-    
-    
-def phase_adv_matrix(mu1, mu2):
-    R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(mu1)
-    R[2:, 2:] = rotation_matrix(mu2)
-    return R
-    
     
 def normalize(eigvecs):
-    """Normalize of transfer matrix eigenvectors."""
+    """Normalize transfer matrix eigenvectors.
+    
+    eigvecs: ndarray, shape (4, 4)
+        Each column is an eigenvector.
+    """
     v1, _, v2, _ = eigvecs.T
     for i in (0, 2):
         v = eigvecs[:, i]
@@ -36,7 +30,11 @@ def normalize(eigvecs):
     
     
 def construct_V(eigvecs):
-    """Construct symplectic normalization matrix V from the eigenvectors."""
+    """Construct symplectic normalization matrix V from the eigenvectors.
+    
+    eigvecs: ndarray, shape (4, 4)
+        Each column is an eigenvector.
+    """
     v1, _, v2, _ = normalize(eigvecs).T
     V = np.zeros((4, 4))
     V[:, 0] = v1.real
@@ -46,20 +44,25 @@ def construct_V(eigvecs):
     return V
 
 
-def construct_Sigma(V, e1, e2):
+def construct_Sigma(V, eps1, eps2):
     """Construct the matched covariance matrix using V.
     
-    It will be matched to the transfer matrix defined by M = V.P.V^-1, where
-    P is a given by the `phase_adv_matrix` method above.
+    It will be matched to the transfer matrix defined by M = V P V^-1, where
+    P rotates x-x' and y-y' phase spaces.
+    
+    V : ndarray, shape (4, 4)
+        Symplectic normalization matrix.
+    eps1, eps2, float
+        Intrinsic beam emittances.
     """
-    return la.multi_dot([V, np.diag([e1, e1, e2, e2]), V.T])
+    return la.multi_dot([V, np.diag([eps1, eps1, eps2, eps2]), V.T])
     
     
-def matched_Sigma(M, e1=1., e2=1.):
+def matched_Sigma(M, eps1=1., eps2=1.):
     """Same as `construct_Sigma`, but computes V first."""
     eigvals, eigvecs = la.eig(M)
     V = construct_V(eigvecs)
-    return construct_Sigma(V, e1, e2)
+    return construct_Sigma(V, eps1, eps2)
     
 
 def matched_Sigma_onemode(M, eps, mode):
@@ -67,13 +70,13 @@ def matched_Sigma_onemode(M, eps, mode):
     one of the intrinsic emittances is zero."""
     eigvals, eigvecs = la.eig(M)
     V = construct_V(eigvecs)
-    e1 = eps if mode == 1 else 0
-    e2 = eps if mode == 2 else 0
-    return construct_Sigma(V, e1, e2)
+    eps1 = eps if mode == 1 else 0
+    eps2 = eps if mode == 2 else 0
+    return construct_Sigma(V, eps1, eps2)
     
     
 def extract_twiss(V):
-    """"Extract the Twiss parameters from the definition of V."""
+    """"Extract 4D Twiss parameters from the definition of V."""
     b1x = V[0, 0]**2
     b2y = V[2, 2]**2
     a1x = -np.sqrt(b1x) * V[1, 0]

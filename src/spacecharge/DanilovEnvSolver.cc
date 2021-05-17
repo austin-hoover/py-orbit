@@ -1,13 +1,13 @@
-#include "EnvSolver.hh"
+#include "DanilovEnvSolver.hh"
 
 
-EnvSolver::EnvSolver(double perveance): CppPyWrapper(NULL)
+DanilovEnvSolver::DanilovEnvSolver(double perveance): CppPyWrapper(NULL)
 {
     Q = perveance;
 }
 
 
-void EnvSolver::trackBunch(Bunch* bunch, double length)
+void DanilovEnvSolver::trackBunch(Bunch* bunch, double length)
 {
     // Compute ellipse size and orientation
     a = bunch->x(0); e = bunch->y(0);
@@ -26,13 +26,13 @@ void EnvSolver::trackBunch(Bunch* bunch, double length)
     double factor = length * (2 * Q / (cx + cy));
         
     // Track envelope
-    if (cx > 0) {
+    if (cx > 0.0) {
         bunch->xp(0) += factor * (a*cos2 - e*sincos)/cx;
         bunch->xp(1) += factor * (b*cos2 - f*sincos)/cx;
         bunch->yp(0) += factor * (e*sin2 - a*sincos)/cx;
         bunch->yp(1) += factor * (f*sin2 - b*sincos)/cx;
     }
-    if (cy > 0) {
+    if (cy > 0.0) {
         bunch->xp(0) += factor * (a*sin2 + e*sincos)/cy;
         bunch->xp(1) += factor * (b*sin2 + f*sincos)/cy;
         bunch->yp(0) += factor * (e*cos2 + a*sincos)/cy;
@@ -40,9 +40,9 @@ void EnvSolver::trackBunch(Bunch* bunch, double length)
     }
     
     // Track bunch particles
-    //     To do:
-    //        * Double check formula for electric field outside envelope
-    //        * Add conducting boundary (Jeff's code)
+    // To do:
+    //     * Test formula for electric field outside envelope
+    //     * Add conducting boundary 
     double cx2 = cx * cx;
     double cy2 = cy * cy;
     double x, y, xn, yn, x2, y2, xn2, yn2;
@@ -71,8 +71,8 @@ void EnvSolver::trackBunch(Bunch* bunch, double length)
             }
         }
         else {
-            // Using expression derived here: https://arxiv.org/abs/physics/0108040. This
-            // has not been tested yet!
+            // Using expression derived here: https://arxiv.org/abs/physics/0108040. 
+            // This has not been tested yet!
             B = xn2 + yn2 - cx2 - cy2;
             C = xn2*cy2 + yn2*cx2 - cx2*cy2;
             t1 = pow(B*B/4 + C, 0.5) + B/2;

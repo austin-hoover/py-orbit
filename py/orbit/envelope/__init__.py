@@ -1,4 +1,4 @@
-from envelope import Envelope
+from danilov import DanilovEnvelope
 
 __all__ = []
-__all__.append('Envelope')
+__all__.append('DanilovEnvelope')

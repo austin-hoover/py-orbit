@@ -1,8 +1,6 @@
 from orbit.space_charge.envelope.EnvSolverNode import EnvSolverNode
-from orbit.space_charge.envelope.EnvSolverLatticeModifications import (
-    set_env_solver_nodes,
-    set_perveance,
-)
+from orbit.space_charge.envelope.EnvSolverLatticeModifications import set_env_solver_nodes
+from orbit.space_charge.envelope.EnvSolverLatticeModifications import set_perveance
 
 __all__ = []
 __all__.append("EnvSolverNode")

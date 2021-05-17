@@ -16,7 +16,7 @@
 #include "wrap_lspacechargecalc.hh"
 #include "wrap_uniform_ellipsoid_field_calculator.hh"
 #include "wrap_spacechargecalc_uniform_ellipse.hh"
-#include "wrap_envsolver.hh"
+#include "wrap_danilovenvsolver.hh"
 
 static PyMethodDef spacechargeMethods[] = { {NULL,NULL} };
 
@@ -42,7 +42,7 @@ extern "C" {
 		wrap_spacecharge::initSpaceChargeCalc3D(module);
 		wrap_spacecharge::initUniformEllipsoidFieldCalculator(module);
 		wrap_spacecharge::initSpaceChargeCalcUniformEllipse(module);
-        wrap_spacecharge::initEnvSolver(module);
+        wrap_spacecharge::initDanilovEnvSolver(module);
 		wrap_lspacechargecalc::initLSpaceChargeCalc(module);
   }
 	

@@ -1,5 +1,5 @@
-#ifndef WRAP_ENVSOLVER_H
-#define WRAP_ENVSOLVER_H
+#ifndef WRAP_DANILOVENVSOLVER_H
+#define WRAP_DANILOVENVSOLVER_H
 
 #include "Python.h"
 
@@ -8,7 +8,7 @@ extern "C" {
 #endif
 
   namespace wrap_spacecharge{
-    void initEnvSolver(PyObject* module);
+    void initDanilovEnvSolver(PyObject* module);
   }
     
 #ifdef __cplusplus

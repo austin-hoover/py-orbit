@@ -230,7 +230,6 @@ class TEAPOT_Ring(AccLattice):
 		self.trackActions(actions, paramsDict)
 		actions.removeAction(accSetWrapLengthAction, AccNode.EXIT)
 
-
 	def getSubLattice(self, index_start = -1, index_stop = -1,):
 		"""
 		It returns the new TEAPOT_Lattice with children with indexes 
@@ -239,8 +238,7 @@ class TEAPOT_Ring(AccLattice):
 		new_teapot_lattice = self._getSubLattice(TEAPOT_Lattice(),index_start,index_stop)
 		new_teapot_lattice.setUseRealCharge(self.getUseRealCharge())
 		return new_teapot_lattice		
-		
-	
+
 	def trackBunch(self, bunch, paramsDict = {}, actionContainer = None):
 		"""
 			It tracks the bunch through the lattice.

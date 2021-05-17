@@ -1,13 +1,9 @@
-import numpy as np
-
-from spacecharge import EnvSolver
+from spacecharge import DanilovEnvSolver
 from orbit.space_charge.envelope import EnvSolverNode
-from orbit.lattice import (
-    AccLattice,
-    AccNode,
-    AccActionsContainer,
-    AccNodeBunchTracker
-)
+from orbit.lattice import AccLattice
+from orbit.lattice import AccNode
+from orbit.lattice import AccActionsContainer
+from orbit.lattice import AccNodeBunchTracker
 from orbit.space_charge.scLatticeModifications import setSC_General_AccNodes
 from orbit.utils.consts import classical_proton_radius
 
@@ -23,31 +19,31 @@ def set_env_solver_nodes(lattice, perveance, max_sep=0.01, min_sep=1e-6):
     Parameters
     ----------
     lattice : AccLattice object
-        The lattice in which to insert the nodes.
+        Lattice in which to insert the nodes.
     perveance : float
-        The dimensionless beam perveance.
+        Dimensionless beam perveance.
     max_sep : float
-        The maximum separation between the nodes
+        Maximum separation between the nodes
     min_sep : float
-        The minimum distance between the nodes.
+        Minimum separation between the nodes.
         
     Returns
     -------
     list[EnvSolverNode]
-        The list of inserted envelope solver nodes.
+        List of the inserted envelope solver nodes.
     """
     lattice.split(max_sep)
-    env_solver_nodes = setSC_General_AccNodes(
-        lattice, min_sep, EnvSolver(perveance), EnvSolverNode)
-    for env_solver_node in env_solver_nodes:
-        name = ''.join([env_solver_node.getName(), 'envsolver'])
-        env_solver_node.setName(name)
+    solver = DanilovEnvSolver(perveance)
+    solver_nodes = setSC_General_AccNodes(lattice, min_sep, solver, EnvSolverNode)
+    for solver_node in solver_nodes:
+        name = ''.join([solver_node.getName(), ':', 'envsolver'])
+        solver_node.setName(name)
     lattice.initialize()
-    return env_solver_nodes
+    return solver_nodes
         
         
-def set_perveance(env_solver_nodes, perveance):
+def set_perveance(solver_nodes, perveance):
     """Change the perveance of the solver nodes."""
-    sc_calculator = EnvSolver(perveance)
-    for env_solver_node in env_solver_nodes:
-        env_solver_node.sc_calculator = sc_calculator
+    calculator = DanilovEnvSolver(perveance)
+    for solver_node in solver_nodes:
+        solver_node.sc_calculator = calculator

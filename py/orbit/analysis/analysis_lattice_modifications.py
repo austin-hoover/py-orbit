@@ -77,11 +77,3 @@ def add_analysis_node(lattice, parent_node_name, kind, mm_mrad=False):
     analysis_node = AnalysisNode(position, kind, mm_mrad=mm_mrad)
     parent_node.addChildNode(analysis_node, parent_node.ENTRANCE)
     return analysis_node
-    
-    
-def add_ws_node(lattice, parent_node_name, nbins, diag_wire_angle):
-    """Add analysis node as child of existing node in lattice."""
-    parent_node = lattice.getNodeForName(parent_node_name)
-    ws_node = WireScannerNode(nbins, diag_wire_angle)
-    parent_node.addChildNode(ws_node, parent_node.ENTRANCE)
-    return ws_node
