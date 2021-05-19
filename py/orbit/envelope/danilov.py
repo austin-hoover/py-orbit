@@ -191,7 +191,7 @@ class DanilovEnvelope:
         self.transform(twiss.rotation_matrix_4D(np.radians(phi)))
         
     def tilt_angle(self, x1='x', x2='y'):
-        """Return ccw tilt angle of ellipse in x1-x2 plane."""
+        """Return ccw angle of ellipse in x1-x2 plane."""
         a, b = self.get_params_for_dim(x1)
         e, f = self.get_params_for_dim(x2)
         return 0.5 * np.arctan2(2*(a*e + b*f), a**2 + b**2 - e**2 - f**2)
@@ -510,7 +510,7 @@ class DanilovEnvelope:
                 M[j, i] = ((y1-y0)*x2*x2 - (y2-y0)*x1*x1) / (x1*x2*(x2-x1))
         return M
         
-    def match_bare(self, lattice, method='auto', sc_nodes=None):
+    def match_bare(self, lattice, method='auto', solver_nodes=None):
         """Match to the lattice without space charge.
         
         Parameters
@@ -518,13 +518,13 @@ class DanilovEnvelope:
         lattice : TEAPOT_Lattice object
             The lattice in which to match. If envelope solver nodes nodes are
             in the lattice, a list of these nodes needs to be passed as the
-            `sc_nodes` parameter so they can be turned off/on.
+            `solver_nodes` parameter so they can be turned off/on.
         method : str
             If '4D', match to the lattice using the eigenvectors of the
             transfer matrix. This may result in the beam being completely
             flat, for example when the lattice is uncoupled. The '2D' method
             will only match the x-x' and y-y' ellipses of the beam.
-        sc_nodes : list, optional
+        solver_nodes : list, optional
             List of nodes which are sublasses of SC_Base_AccNode. If provided,
             all space charge nodes are turned off, then the envelope is matched
             to the bare lattice, then all space charge nodes are turned on.
@@ -534,8 +534,8 @@ class DanilovEnvelope:
         ndarray, shape (8,)
             The matched envelope parameters.
         """
-        if sc_nodes is not None:
-            hf.toggle_spacecharge_nodes(sc_nodes, 'off')
+        if solver_nodes is not None:
+            hf.toggle_spacecharge_nodes(solver_nodes, 'off')
             
         # Get linear transfer matrix
         M = self.transfer_matrix(lattice)
@@ -568,8 +568,8 @@ class DanilovEnvelope:
             f = ep = pad
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         
-        if sc_nodes is not None:
-            hf.toggle_spacecharge_nodes(sc_nodes, 'on')
+        if solver_nodes is not None:
+            hf.toggle_spacecharge_nodes(solver_nodes, 'on')
         return self.params
         
     def match(self, lattice, solver_nodes, method='auto', tol=1e-4, verbose=0):
@@ -593,7 +593,7 @@ class DanilovEnvelope:
             the 'replace_avg' method will be tried.
         """
         if self.perveance == 0:
-            return self.match_bare(lattice, solver_nodes)
+            return self.match_bare(lattice, 'auto', solver_nodes)
             
         def initialize():
             self.set_twiss4D_param('u', 0.5)
