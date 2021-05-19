@@ -606,7 +606,7 @@ class DanilovEnvelope:
             return self._match_lsq(lattice, verbose=verbose)
         elif method == 'replace_avg':
             return self._match_replace_avg(lattice, verbose=verbose)
-        else:
+        elif method == 'auto':
             result = self._match_lsq(lattice, verbose=verbose)
             if result.cost > tol:
                 print "Cost = {:.2e} > tol.".format(result.cost)
@@ -614,6 +614,8 @@ class DanilovEnvelope:
                 initialize()
                 result = self._match_replace_avg(lattice, verbose=verbose)
             return result
+        else:
+            raise ValueError("Invalid method! Options: {'lsq', 'replace_avg', 'auto'}")
             
     def _residuals(self, lattice, factor=1e6):
         """Return initial minus final beam moments after tracking. 
