@@ -7,14 +7,15 @@ import scipy.optimize as opt
 from tqdm import trange
 
 from bunch import Bunch
-from orbit.lattice import AccLattice, AccNode, AccActionsContainer
-from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
-from orbit.teapot_base import MatrixGenerator
-from orbit.matrix_lattice import MATRIX_Lattice
 from orbit.bunch_generators import TwissContainer
 from orbit.bunch_generators import WaterBagDist2D
 from orbit.bunch_generators import GaussDist2D
 from orbit.bunch_generators import KVDist2D
+from orbit.lattice import AccLattice, AccNode, AccActionsContainer
+from orbit.matrix_lattice import MATRIX_Lattice
+from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
+from orbit.teapot_base import MatrixGenerator
+from orbit.twiss.twiss import get_eigtunes
 from orbit.utils.consts import classical_proton_radius, speed_of_light
 from orbit_utils import Matrix
 
@@ -176,8 +177,12 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
             lattice.reverseOrder()
         lattice.set_fringe(fringe)
         lattice.initialize()
-        tilt_elements_containing(lattice, 'qf', +angle)
-        tilt_elements_containing(lattice, 'qd', -angle)
+        for node in lattice.getNodes():
+            name = node.getName()
+            if 'qf' in name:
+                node.setTiltAngle(+angle)
+            elif 'qd' in name:
+                node.setTiltAngle(-angle)
         return lattice
 
     def cost(kvals, correct_tunes, mass=0.93827231, energy=1):
