@@ -15,7 +15,7 @@ from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.matrix_lattice import MATRIX_Lattice
 from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.teapot_base import MatrixGenerator
-from orbit.twiss.twiss import get_eigtunes
+from orbit.twiss.twiss import get_eigtunes, params_from_transfer_matrix
 from orbit.utils.consts import classical_proton_radius, speed_of_light
 from orbit_utils import Matrix
 
