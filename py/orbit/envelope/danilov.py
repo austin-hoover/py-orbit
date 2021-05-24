@@ -572,7 +572,7 @@ class DanilovEnvelope:
             hf.toggle_spacecharge_nodes(solver_nodes, 'on')
         return self.params
         
-    def match(self, lattice, solver_nodes, method='auto', tol=1e-4, verbose=0):
+    def match(self, lattice, solver_nodes, method='auto', tol=1e-4, **kws):
         """Match the envelope to the lattice.
         
         lattice : TEAPOT_Lattice
@@ -591,6 +591,8 @@ class DanilovEnvelope:
         tol : float
             If the final cost function of the 'lsq' method is above `tol`, the
             the 'replace_avg' method will be tried.
+        **kws
+            Key word arguments for the matching method.
         """
         if self.perveance == 0:
             return self.match_bare(lattice, 'auto', solver_nodes)
@@ -603,16 +605,16 @@ class DanilovEnvelope:
         initialize()
         
         if method == 'lsq':
-            return self._match_lsq(lattice, verbose=verbose)
+            return self._match_lsq(lattice, **kws)
         elif method == 'replace_avg':
-            return self._match_replace_avg(lattice, verbose=verbose)
+            return self._match_replace_avg(lattice, **kws)
         elif method == 'auto':
-            result = self._match_lsq(lattice, verbose=verbose)
+            result = self._match_lsq(lattice, **kws)
             if result.cost > tol:
                 print "Cost = {:.2e} > tol.".format(result.cost)
                 print "Trying 'replace by average' method."
                 initialize()
-                result = self._match_replace_avg(lattice, verbose=verbose)
+                result = self._match_replace_avg(lattice, **kws)
             return result
         else:
             raise ValueError("Invalid method! Options: {'lsq', 'replace_avg', 'auto'}")
