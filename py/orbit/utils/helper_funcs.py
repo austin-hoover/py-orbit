@@ -15,7 +15,7 @@ from orbit.lattice import AccLattice, AccNode, AccActionsContainer
 from orbit.matrix_lattice import MATRIX_Lattice
 from orbit.teapot import teapot, TEAPOT_Lattice, TEAPOT_MATRIX_Lattice
 from orbit.teapot_base import MatrixGenerator
-from orbit.twiss.twiss import get_eigtunes
+from orbit.twiss.twiss import get_eigtunes, params_from_transfer_matrix
 from orbit.utils.consts import classical_proton_radius, speed_of_light
 from orbit_utils import Matrix
 
@@ -71,6 +71,13 @@ def get_perveance(mass, kin_energy, line_density):
     return (2 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
     
     
+def get_intensity(perveance, mass, kin_energy, bunch_length):
+    """Return intensity from perveance."""
+    gamma = 1 + (kin_energy / mass) # Lorentz factor
+    beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
+    return beta**2 * gamma**3 * perveance / (2 * classical_proton_radius)
+    
+    
 def get_Brho(mass, kin_energy):
     """Compute magnetic rigidity [T * m]/
     
@@ -98,7 +105,7 @@ def get_pc(mass, kin_energy):
     return np.sqrt(kin_energy * (kin_energy + 2 * mass))
 
 
-def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
+def fodo_lattice(mux, muy, L, fill_fac=0.5, angle=0, start='drift', fringe=False,
                  reverse=False):
     """Create a FODO lattice.
     
@@ -147,8 +154,8 @@ def fodo_lattice(mux, muy, L, fill_fac, angle=0, start='drift', fringe=False,
         qd_half1 = teapot.QuadTEAPOT('qd_half1')
         qd_half2 = teapot.QuadTEAPOT('qd_half2')
         # Set lengths
-        half_nodes = (drift_half1, drift_half2, qf_half1, qf_half2, qd_half1,
-                      qd_half2)
+        half_nodes = (drift_half1, drift_half2, qf_half1,
+                      qf_half2, qd_half1, qd_half2)
         full_nodes = (drift1, drift2, qf, qd)
         for node in half_nodes:
             node.setLength(L * fill_fac / 4)
@@ -439,7 +446,7 @@ def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
     """
     bunch = Bunch()
     bunch.mass(mass)
-    bunch.macroSize(int(intensity / length))
+    bunch.macroSize(int(intensity / length) if intensity > 0 else 1)
     bunch.getSyncParticle().kinEnergy(kin_energy)
     params_dict = {'bunch': bunch}
     constructors = {'kv':KVDist2D,
