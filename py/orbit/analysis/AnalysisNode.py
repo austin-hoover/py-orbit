@@ -63,11 +63,14 @@ class AnalysisNode(DriftTEAPOT):
         'bunch_stats'
             Stores the bunch moments and twiss parameters.
     """
-    def __init__(self, position, kind, name='analysis', mm_mrad=True,
+    def __init__(self, position, kind=None, name='analysis', mm_mrad=True,
                  longitudinal=False):
         DriftTEAPOT.__init__(self, name)
         self.position = position
         self.setLength(0.0)
+        possible_kinds = ['env_monitor', 'bunch_monitor', 'bunch_stats']
+        if kind not in possible_kinds:
+            raise ValueError('`kind` must be in {}'.format(possible_kinds))
         self.kind = kind
         self.mm_mrad = mm_mrad
         self.longitudinal = longitudinal
