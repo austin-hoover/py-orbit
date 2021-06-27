@@ -4,11 +4,7 @@ This module contains functions related to Twiss parameters, transfer matrices, e
 import numpy as np
 import numpy.linalg as la
 
-
-def rotation_matrix(angle):
-    """2x2 clockwise rotation matrix."""
-    c, s = np.cos(angle), np.sin(angle)
-    return np.array([[c, s], [-s, c]])
+from orbit.utils.general import rotation_matrix
 
 
 def rotation_matrix_4D(angle):

@@ -36,6 +36,12 @@ def rand_rows(X, n):
         idx = np.random.choice(Xsamp.shape[0], n, replace=False)
         Xsamp = Xsamp[idx]
     return Xsamp
+    
+    
+def rotation_matrix(angle):
+    """2x2 clockwise rotation matrix."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, s], [-s, c]])
 
 
 # The following three functions are from Tony Yu's blog post: https://tonysyu.github.io/ragged-arrays.html#.YKVwQy9h3OR

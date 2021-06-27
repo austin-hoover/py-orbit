@@ -11,6 +11,8 @@ from orbit.lattice import AccNode, AccActionsContainer, AccNodeBunchTracker
 from orbit.teapot import DriftTEAPOT
 from orbit.utils import orbitFinalize, NamedObject, ParamsDictObject
 from orbit.utils import helper_funcs as hf
+from orbit.utils.general import apply
+from orbit.twiss.twiss import rotation_matrix_4D
 
 
 def get_coords(bunch, mm_mrad=False, longitudinal=False):
@@ -205,7 +207,7 @@ class WireScannerNode(DriftTEAPOT):
         # along the y axis. We add a random number to the rotation angle to
         # simulate the uncertainty in the true angle.
         angle = self.phi * np.random.uniform((1 - self.dphi), (1 + self.dphi))
-        X = hf.apply(hf.rotation_matrix_4D(angle), X)
+        X = apply(rotation_matrix_4D(angle), X)
         self.hist['u'], self.pos['u'] = bin_data(X[:, 0])
 
     def estimate_variance(self, dim='x'):
