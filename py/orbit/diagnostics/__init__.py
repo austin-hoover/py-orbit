@@ -23,6 +23,7 @@ from TeapotDiagnosticsNode import TeapotTuneAnalysisNode
 
 
 __all__ = []
+__all__.append("analysis")
 __all__.append("BunchStats")
 __all__.append("DanilovEnvelopeBunch")
 __all__.append("bunch_coord_array")
