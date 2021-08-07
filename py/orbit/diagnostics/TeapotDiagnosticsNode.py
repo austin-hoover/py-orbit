@@ -19,9 +19,9 @@ from diagnostics import Moments, MomentsSetMember, BPMSignal
 # import teapot drift class
 from orbit.teapot import DriftTEAPOT
 
-
 #import Bunch diagnostics
 from bunch import BunchTuneAnalysis
+
 
 class TeapotStatLatsNode(DriftTEAPOT):
 	""" 
@@ -56,6 +56,7 @@ class TeapotStatLatsNode(DriftTEAPOT):
 	def setLatticeLength(self, lattlength):
 		self.lattlength = lattlength
 
+        
 class TeapotStatLatsNodeSetMember(DriftTEAPOT):
 	"""
 		The statlats node class for TEAPOT lattice
@@ -133,7 +134,6 @@ class TeapotMomentsNode(DriftTEAPOT):
 		self.lattlength = lattlength
 	
 
-
 class TeapotMomentsNodeSetMember(DriftTEAPOT):
 	"""
 	The moments node class for TEAPOT lattice
@@ -152,7 +152,6 @@ class TeapotMomentsNodeSetMember(DriftTEAPOT):
 		self.lattlength = 0.0
 		self.active = True
 		
-	
 	def track(self, paramsDict):
 		"""
 		The moments-teapot class implementation of the AccNodeBunchTracker class track(probe) method.
@@ -179,9 +178,9 @@ class TeapotMomentsNodeSetMember(DriftTEAPOT):
 		self.moments.resetFile(self.file)
 		
 
+        
 class TeapotTuneAnalysisNode(DriftTEAPOT):
 	
-			
 	def __init__(self, name = "tuneanalysis no name"):
 		"""
 		Constructor. Creates the StatLats TEAPOT element.
@@ -210,9 +209,9 @@ class TeapotTuneAnalysisNode(DriftTEAPOT):
 	def assignTwiss(self, betax, alphax, etax, etapx, betay, alphay):
 		self.bunchtune.assignTwiss(betax, alphax, etax, etapx, betay, alphay)
 
+        
 class TeapotBPMSignalNode(DriftTEAPOT):
 	
-			
 	def __init__(self, name = "BPMSignal no name"):
 		"""
 		Constructor. Creates the StatLats TEAPOT element.
@@ -242,4 +241,3 @@ class TeapotBPMSignalNode(DriftTEAPOT):
 		xAvg = self.bpm.getSignalX()
 		yAvg = self.bpm.getSignalY()
 		return xAvg, yAvg
-		

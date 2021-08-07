@@ -17,6 +17,7 @@ from bunch import BunchTwissAnalysis
 from bunch import BunchTuneAnalysis
 from orbit.utils.consts import speed_of_light
 
+
 class StatLats:
 	""" 
 	This class gathers delivers the statistical twiss parameters
@@ -202,6 +203,7 @@ class MomentsSetMember:
 	def resetFile(self, file):
 		self.file_out = file
 		
+        
 class BPMSignal:
 	"""
 		This class delivers the average value for coordinate x and y 
@@ -212,9 +214,7 @@ class BPMSignal:
 		self.yAvg = 0.0
 		self.xpAvg = 0.0
 		self.ypAvg = 0.0
-		
 
-		
 	def analyzeSignal(self, bunch):
 		
 		self.bunchtwissanalysis.analyzeBunch(bunch)

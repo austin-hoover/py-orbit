@@ -1,17 +1,9 @@
-"""
-This module contains functions that should be of general use.
-"""
 import numpy as np
 
 
 def tprint(string, indent=4):
     """Print with indent."""    
     print indent * ' ' + str(string)
-    
-    
-def step_func(x):
-    "Heaviside step function."
-    return 1 if x >= 0 else 0
     
     
 def apply(M, X):
@@ -21,7 +13,7 @@ def apply(M, X):
 
 def normalize(X):
     """Normalize all rows of X to unit length."""
-    return np.apply_along_axis(lambda x: x/la.norm(x), 1, X)
+    return np.apply_along_axis(lambda x: x / np.linalg.norm(x), 1, X)
 
 
 def symmetrize(M):
@@ -44,8 +36,14 @@ def rotation_matrix(angle):
     return np.array([[c, s], [-s, c]])
 
 
+def rotation_matrix_4D(angle):
+    """4x4 matrix to rotate [x, x', y, y'] clockwise in the x-y plane."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, 0, s, 0], [0, c, 0, s], [-s, 0, c, 0], [0, -s, 0, c]])
+
+
 # The following three functions are from Tony Yu's blog post: https://tonysyu.github.io/ragged-arrays.html#.YKVwQy9h3OR
-    
+
 def stack_ragged(array_list, axis=0):
     """Stacks list of arrays along first axis.
     

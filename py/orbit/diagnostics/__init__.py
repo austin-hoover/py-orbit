@@ -2,7 +2,14 @@
 ## \brief The classes and functions for diagnostics
 ##
 ## Classes:
-
+from analysis import BunchStats
+from analysis import DanilovEnvelopeBunch
+from analysis import bunch_coord_array
+from analysis_lattice_modifications import AnalysisNodeInserter
+from analysis_node import BunchMonitorNode
+from analysis_node import BunchStatsNode
+from analysis_node import DanilovEnvelopeBunchMonitorNode
+from analysis_node import WireScannerNode
 from diagnostics import StatLats, StatLatsSetMember
 from diagnostics import Moments, MomentsSetMember
 from diagnosticsLatticeModifications import addTeapotDiagnosticsNode
@@ -15,6 +22,14 @@ from TeapotDiagnosticsNode import TeapotTuneAnalysisNode
 
 
 __all__ = []
+__all__.append("BunchStats")
+__all__.append("DanilovEnvelopeBunch")
+__all__.append("bunch_coord_array")
+__all__.append("BunchMonitorNode")
+__all__.append("BunchStatsNode")
+__all__.append("DanilovEnvelopeBunchMonitorNode")
+__all__.append("WireScannerNode")
+__all__.append("analysis_nodeInserter")
 __all__.append("StatLats")
 __all__.append("StatLatsSetMember")
 __all__.append("TeapotStatLatsNode")

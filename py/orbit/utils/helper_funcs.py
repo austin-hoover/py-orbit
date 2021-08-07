@@ -7,6 +7,7 @@ import scipy.optimize as opt
 from tqdm import trange
 
 from bunch import Bunch
+from orbit.analysis import bunch_coord_array
 from orbit.bunch_generators import TwissContainer
 from orbit.bunch_generators import WaterBagDist2D
 from orbit.bunch_generators import GaussDist2D
@@ -413,7 +414,7 @@ def initialize_bunch(mass, energy):
     return bunch, params_dict
         
     
-def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
+def coasting_beam(kind, n_parts, twiss_params, emittances, length, mass,
                   kin_energy, intensity=0, **kws):
     """Generate bunch with no energy spread and uniform longitudinal density.
     
@@ -421,7 +422,7 @@ def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
     ----------
     kind : {'kv', 'gaussian', 'waterbag'}
         The kind of distribution.
-    nparts : int
+    n_parts : int
         Number of macroparticles.
     twiss_params : (ax, ay, bx, by)
         2D Twiss parameters (`ax` means 'alpha x' and so on).
@@ -456,43 +457,19 @@ def coasting_beam(kind, nparts, twiss_params, emittances, length, mass,
     twissX = TwissContainer(ax, bx, ex)
     twissY = TwissContainer(ay, by, ey)
     dist_generator = constructors[kind](twissX, twissY, **kws)
-    for i in range(nparts):
+    for i in range(n_parts):
         x, xp, y, yp = dist_generator.getCoordinates()
         z = np.random.uniform(0, length)
         bunch.addParticle(x, xp, y, yp, z, 0.0)
     return bunch, params_dict
                                                                     
     
-def get_coords(bunch, mm_mrad=False):
-    """Extract coordinate array from bunch.
-    
-    Parameters
-    ----------
-    bunch : Bunch
-        The bunch to extract the coordinates from.
-    mm_mrad : bool
-        Whether to convert to mm (position) and mrad (slope).
-        
-    Returns
-    -------
-    ndarray, shape (nparts, 6)
-    """
-    nparts = bunch.getSize()
-    X = np.zeros((nparts, 6))
-    for i in range(nparts):
-        X[i] = [bunch.x(i), bunch.xp(i), bunch.y(i), bunch.yp(i),
-                bunch.z(i), bunch.dE(i)]
-    if mm_mrad:
-        X *= 1000.
-    return X
-    
-    
 def dist_to_bunch(X, bunch, length, deltaE=0.0):
     """Fill bunch with particles.
     
     Parameters
     ----------
-    X : ndarray, shape (nparts, 4)
+    X : ndarray, shape (n_parts, 4)
         Transverse bunch coordinate array.
     bunch : Bunch
         The bunch to populate.
@@ -513,28 +490,8 @@ def dist_to_bunch(X, bunch, length, deltaE=0.0):
     return bunch
     
     
-def dist_from_bunch(bunch):
-    """Get coordinate array from bunch.
-    
-    Parameters
-    ----------
-    bunch : Bunch
-        Bunch containing `nparts` macroparticles.
-    
-    Returns
-    -------
-    X : ndarray, shape (nparts, 4)
-        The transverse bunch coordinate array.
-    """
-    nparts = bunch.getSize()
-    X = np.zeros((nparts, 4))
-    for i in range(nparts):
-        X[i] = [bunch.x(i), bunch.xp(i), bunch.y(i), bunch.yp(i)]
-    return X
-    
-    
 def track_bunch(bunch, params_dict, lattice, nturns=1, meas_every=0,
-                info='coords', progbar=True, mm_mrad=True):
+                info='coords', progbar=True, mm_mrad=True, transverse_only=False):
     """Track a bunch through the lattice.
     
     Parameters
@@ -561,14 +518,14 @@ def track_bunch(bunch, params_dict, lattice, nturns=1, meas_every=0,
     Returns
     -------
     ndarray, shape (nturns, ?, ?)
-        If tracking coords, shape is (nturns, nparts, 4). If tracking
+        If tracking coords, shape is (nturns, n_parts, 4). If tracking
         covariance matrix, shape is (nturns, 4, 4)
     """
     info_list = []
     turns = trange(nturns) if progbar else range(nturns)
     for turn in turns:
         if meas_every > 0 and turn % meas_every == 0:
-            X = get_coords(bunch, mm_mrad=mm_mrad)
+            X = bunch_coord_array(bunch, mm_mrad, transverse_only)
             if info == 'coords':
                 info_list.append(X)
             elif info == 'cov':

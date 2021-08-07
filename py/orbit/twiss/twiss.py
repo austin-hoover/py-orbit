@@ -1,16 +1,7 @@
-"""
-This module contains functions related to Twiss parameters, transfer matrices, etc.
-"""
 import numpy as np
 import numpy.linalg as la
 
 from orbit.utils.general import rotation_matrix
-
-
-def rotation_matrix_4D(angle):
-    """4x4 matrix to rotate [x, x', y, y'] clockwise in the x-y plane."""
-    c, s = np.cos(angle), np.sin(angle)
-    return np.array([[c, 0, s, 0], [0, c, 0, s], [-s, 0, c, 0], [0, -s, 0, c]])
 
 
 def phase_adv_matrix(mu1, mu2):

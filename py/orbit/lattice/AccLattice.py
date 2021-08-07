@@ -244,13 +244,6 @@ class AccLattice(NamedObject, TypedObject):
             node_length = node.getLength()
             if node_length > max_node_length:
                 node.setnParts(1 + int(node_length / max_node_length))
-                
-    def has_tilted_elements(self):
-        """"Return True if there are any tilted elements in the lattice."""
-        for node in self.getNodes():
-            if node.getTiltAngle() != 0:
-                return True
-        return False
         
     def set_fringe(self, switch):
         """Turn on(off) fringe field calculation for all nodes."""
