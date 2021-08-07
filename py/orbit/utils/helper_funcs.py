@@ -1,13 +1,11 @@
-"""
-This module contains functions for use in PyORBIT scripts.
-"""
+"""Helper functions for PyORBIT scripts."""
 import numpy as np
-import numpy.linalg as la
-import scipy.optimize as opt
+from numpy import linalg as la
+from scipy import optimize as opt
 from tqdm import trange
 
 from bunch import Bunch
-from orbit.analysis import bunch_coord_array
+from orbit.diagnostics import bunch_coord_array
 from orbit.bunch_generators import TwissContainer
 from orbit.bunch_generators import WaterBagDist2D
 from orbit.bunch_generators import GaussDist2D
@@ -19,35 +17,6 @@ from orbit.teapot_base import MatrixGenerator
 from orbit.twiss.twiss import get_eigtunes, params_from_transfer_matrix
 from orbit.utils.consts import classical_proton_radius, speed_of_light
 from orbit_utils import Matrix
-
-             
-def lattice_from_file(file, seq='', fringe=False, kind='madx'):
-    """Shortcut to create TEAPOT_Lattice from MAD or MADX file.
-    
-    Parameters
-    ----------
-    file : str
-        '.lat' file output from MADX script.
-    seq : str
-        Key word for start of beam line definition in `file`. In MAD this is
-        called 'line'.
-    fringe : bool
-        Whether to turn on fringe fields.
-    kind : {'madx', 'mad'}
-        File format.
-    
-    Returns
-    -------
-    TEAPOT_Lattice
-    """
-    lattice = teapot.TEAPOT_Lattice()
-    if kind == 'madx':
-        lattice.readMADX(file, seq)
-    elif kind == 'mad':
-        line = seq
-        lattice.readMAD(file, line)
-    lattice.set_fringe(fringe)
-    return lattice
     
     
 def get_perveance(mass, kin_energy, line_density):
