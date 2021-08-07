@@ -50,7 +50,7 @@ class DanilovEnvelope:
             x = a*cos(psi) + b*sin(psi), x' = a'*cos(psi) + b'*sin(psi),
             y = e*cos(psi) + f*sin(psi), y' = e'*cos(psi) + f'*sin(psi),
         where 0 <= psi <= 2pi.
-    eps : float
+    eps_l : float
         The nonzero rms intrinsic emittance of the beam (eps_1 or eps_2) [m*rad].
     mode : int
         Whether to choose eps_2 = 0 (mode 1) or eps_1 = 0 (mode 2). This amounts
@@ -68,9 +68,9 @@ class DanilovEnvelope:
     perveance : float
         Dimensionless beam perveance.
     """
-    def __init__(self, eps=1., mode=1, eps_x_frac=0.5, mass=mass_proton,
+    def __init__(self, eps_l=1., mode=1, eps_x_frac=0.5, mass=mass_proton,
                  kin_energy=1.0, length=1.0, intensity=0.0, params=None):
-        self.eps = eps
+        self.eps_l = eps_l
         self.mode = mode
         self.eps_x_frac, self.ey_frac = eps_x_frac, 1.0 - eps_x_frac
         self.mass = mass
@@ -78,7 +78,8 @@ class DanilovEnvelope:
         self.length = length
         self.set_intensity(intensity)
         if params is None:
-            eps_x, eps_y = eps_x_frac * eps, (1 - eps_x_frac) * eps
+            eps_x = eps_x_frac * eps_l
+            eps_y = (1.0 - eps_x_frac) * eps_l
             rx, ry = np.sqrt(4 * eps_x), np.sqrt(4 * eps_y)
             if mode == 1:
                 self.params = np.array([rx, 0, 0, rx, 0, -ry, +ry, 0])
@@ -87,8 +88,8 @@ class DanilovEnvelope:
         else:
             self.params = np.array(params)
             eps_x, eps_y = self.apparent_emittances()
-            self.eps = eps_x + eps_y
-            self.eps_x_frac = eps_x / self.eps
+            self.eps_l = eps_x + eps_y
+            self.eps_x_frac = eps_x / self.eps_l
         
     def copy(self):
         """Produced a deep copy of the envelope."""
@@ -160,7 +161,7 @@ class DanilovEnvelope:
         In the transformed coordates the covariance matrix is diagonal, and the
         x-x' and y-y' emittances are the intrinsic emittances. 
         """
-        r_n = np.sqrt(4 * self.eps)
+        r_n = np.sqrt(4 * self.eps_l)
         if self.mode == 1:
             self.params = np.array([r_n, 0, 0, r_n, 0, 0, 0, 0])
         elif self.mode == 2:
@@ -257,9 +258,9 @@ class DanilovEnvelope:
     def intrinsic_emittances(self, mm_mrad=False):
         """Return rms intrinsic emittances (eps_1 * eps_2 = eps_4D)"""
         if self.mode == 1:
-            return np.array([self.eps, 0.0])
+            return np.array([self.eps_l, 0.0])
         elif self.mode == 2:
-            return np.array([0.0, self.eps])
+            return np.array([0.0, self.eps_l])
                 
     def twiss2D(self):
         """Return 2D Twiss parameters."""
@@ -277,14 +278,14 @@ class DanilovEnvelope:
         Sigma = self.cov()
         eps_x = np.sqrt(la.det(Sigma[:2, :2]))
         eps_y = np.sqrt(la.det(Sigma[2:, 2:]))
-        beta_lx = Sigma[0, 0] / self.eps
-        beta_ly = Sigma[2, 2] / self.eps
-        alpha_lx = -Sigma[0, 1] / self.eps
-        alpha_ly = -Sigma[2, 3] / self.eps
+        beta_lx = Sigma[0, 0] / self.eps_l
+        beta_ly = Sigma[2, 2] / self.eps_l
+        alpha_lx = -Sigma[0, 1] / self.eps_l
+        alpha_ly = -Sigma[2, 3] / self.eps_l
         if self.mode == 1:
-            u = eps_y / self.eps
+            u = eps_y / self.eps_l
         elif self.mode == 2:
-            u = eps_x / self.eps
+            u = eps_x / self.eps_l
         nu = self.phase_diff()
         return np.array([alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu])
         
@@ -293,8 +294,8 @@ class DanilovEnvelope:
         V = twiss.V_matrix_4x4_uncoupled(alpha_x, alpha_y, beta_x, beta_y)
         if not eps_x_frac:
             eps_x_frac = self.eps_x_frac
-        eps_x = eps_x_frac * self.eps
-        eps_y = (1.0 - eps_x_frac) * self.eps
+        eps_x = eps_x_frac * self.eps_l
+        eps_y = (1.0 - eps_x_frac) * self.eps_l
         A = np.sqrt(4 * np.diag([eps_x, eps_x, eps_y, eps_y]))
         self.norm2D(scale=True)
         self.transform(np.matmul(V, A))
