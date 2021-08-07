@@ -40,7 +40,7 @@ class BunchMonitorNode(AnalysisNode):
         
     def track(self, params_dict):
         bunch = params_dict['bunch']
-        X = coord_array(bunch, self.mm_mrad, self.transverse_only)
+        X = bunch_coord_array(bunch, self.mm_mrad, self.transverse_only)
         self.data.append(X)
         
     
@@ -52,7 +52,7 @@ class BunchStatsNode(AnalysisNode):
         
     def track(self, params_dict):
         bunch = params_dict['bunch']
-        X = coord_array(bunch, self.mm_mrad, transverse_only=True)
+        X = bunch_coord_array(bunch, self.mm_mrad, transverse_only=True)
         self.data.append(BunchStats(X))
         
         
@@ -64,7 +64,7 @@ class DanilovEnvelopeBunchMonitorNode(AnalysisNode):
         
     def track(self, params_dict):
         bunch = params_dict['bunch']
-        X = coord_array(bunch, self.mm_mrad, transverse_only=True)
+        X = bunch_coord_array(bunch, self.mm_mrad, transverse_only=True)
         self.data.append(DanilovEnvelopeBunch(X))
         
 

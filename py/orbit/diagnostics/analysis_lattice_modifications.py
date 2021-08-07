@@ -9,6 +9,14 @@ from orbit.lattice import AccNode
 from orbit.teapot import DriftTEAPOT
 
 
+NAMETAGS = {
+    BunchMonitorNode: 'bunch_monitor',
+    BunchStatsNode: 'bunch_stats',
+    DanilovEnvelopeBunchMonitorNode: 'danilov_envelope_bunch_monitor',
+    WireScannerNode: 'wire-scanner',
+}
+
+
 def node_index_position_list(lattice, min_sep=1e-5):
     items = []
     position = running_length = 0.
@@ -24,55 +32,60 @@ def node_index_position_list(lattice, min_sep=1e-5):
     return items
 
 
-class AnalysisNodeInserter:
-    
-    def __init__(self, constructor, **constructor_kws):
-        self.constructor = constructor
-        self.constructor_kws = constructor_kws
-        if self.constructor_kws is None:
-            self.constructor_kws = dict()
-        self.nametag = 'analysis'
-        if self.constructor == BunchMonitorNode:
-            self.nametag = 'bunch_monitor'
-        elif self.constructor == BunchStatsNode:
-            self.nametag == 'bunch_stats'
-        elif self.constructor == DanilovEnvelopeBunchMonitorNode:
-            self.nametag = 'danilov_envelope_bunch_monitor'
-        elif self.constructor == WireScannerNode:
-            self.nametag = 'wire-scanner'
-            
-    def create_node(self):
-        return self.constructor(**self.constructor_kws)
-        
-    def insert_at_entrance(self, lattice, parent_node):
-        if type(parent_node) is str:
-            parent_node = lattice.getNodeForName(parent_node)
-        analysis_node = self.create_node()
-        analysis_node.setName('{}:{}'.format(parent_node.getName(), self.nametag))
-        analysis_node.set_position(lattice.getNodePositionsDict()[parent_node][0])
-        analysis_node.setTiltAngle(-parent_node.getTiltAngle())
-        parent_node.addChildNode(analysis_node, parent_node.ENTRANCE)
-        return analysis_node
-    
-    def insert_throughout(self, lattice, dense=False, min_sep=1e-5):
-        """Insert analysis nodes as child nodes in the lattice.
-        
-        If `dense`, insert at every part of every node rather than just at every node.
-        """
-        if not dense:
-            return [self.insert_at_entrance(lattice, node) for node in lattice.getNodes()]
-        
-        analysis_nodes = []
-        
-        def add_analysis_node_as_child(parent_node, part_index, position):
-            analysis_node = self.create_node()
-            analysis_node.setName('{}:{}:{}'.format(parent_node.getName(), self.nametag, part_index))
-            analysis_node.set_position(position)
-            analysis_node.setTiltAngle(-parent_node.getAllChildren()[0].getTiltAngle())
-            parent_node.addChildNode(analysis_node, AccNode.BODY, part_index, AccNode.BEFORE)
-            analysis_nodes.append(analysis_node)
+def add_analysis_node(constructor, lattice, parent_node, **constructor_kws):
+    """Create/insert analysis node at one point in the lattice.
 
-        for (parent_node, part_index, position) in node_index_position_list(lattice, min_sep):
-            add_analysis_node_as_child(parent_node, part_index, position)
-            
+    Parameters
+    ----------
+    constructor : AnalysisNode subclass
+        This is called to create the analysis node.
+    lattice : AccLattice
+        The lattice in which to insert the node. This is provided to get the position
+        of the parent node.
+    parent_node : AccNode or str
+        The parent node of the analysis node. Can also just provide its name.
+    dense: bool
+        Whether to insert at every part of every node rather than just at every node.
+    **constructor_kws
+        Key word arguments passed to the analysis node constructor.
+    """
+    if type(parent_node) is str:
+        parent_node = lattice.getNodeForName(parent_node)
+    analysis_node = constructor(**constructor_kws)
+    analysis_node.setName('{}:{}'.format(parent_node.getName(), NAMETAGS[constructor]))
+    analysis_node.set_position(lattice.getNodePositionsDict()[parent_node][0])
+    analysis_node.setTiltAngle(-parent_node.getTiltAngle())
+    parent_node.addChildNode(analysis_node, parent_node.ENTRANCE)
+    return analysis_node
+
+
+def add_analysis_nodes(constructor, lattice, dense=False, min_sep=1e-5, **constructor_kws):
+    """Create/insert analysis nodes throughout the lattice.
+
+    Parameters
+    ----------
+    constructor : AnalysisNode subclass
+        This is called to create the analysis node.
+    lattice : AccLattice
+        The lattice in which to insert the nodes.
+    dense: bool
+        Whether to insert at every part of every node rather than just at every node.
+    **constructor_kws
+        Key word arguments passed to the analysis node constructor.
+    """
+    if not dense:
+        analysis_nodes = []
+        for node in lattice.getNodes():
+            analysis_node = add_analysis_node(constructor, lattice, node, **constructor_kws)
+            analysis_nodes.append(analysis_node)
         return analysis_nodes
+
+    analysis_nodes = []
+    for (parent_node, part_index, position) in node_index_position_list(lattice, min_sep):
+        analysis_node = constructor(**constructor_kws)
+        analysis_node.setName('{}:{}:{}'.format(parent_node.getName(), NAMETAGS[constructor], part_index))
+        analysis_node.set_position(position)
+        analysis_node.setTiltAngle(-parent_node.getAllChildren()[0].getTiltAngle())
+        parent_node.addChildNode(analysis_node, AccNode.BODY, part_index, AccNode.BEFORE)
+        analysis_nodes.append(analysis_node)
+    return analysis_nodes

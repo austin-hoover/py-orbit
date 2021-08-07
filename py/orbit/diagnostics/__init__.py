@@ -5,7 +5,8 @@
 from analysis import BunchStats
 from analysis import DanilovEnvelopeBunch
 from analysis import bunch_coord_array
-from analysis_lattice_modifications import AnalysisNodeInserter
+from analysis_lattice_modifications import add_analysis_node
+from analysis_lattice_modifications import add_analysis_nodes
 from analysis_node import BunchMonitorNode
 from analysis_node import BunchStatsNode
 from analysis_node import DanilovEnvelopeBunchMonitorNode
@@ -29,7 +30,8 @@ __all__.append("BunchMonitorNode")
 __all__.append("BunchStatsNode")
 __all__.append("DanilovEnvelopeBunchMonitorNode")
 __all__.append("WireScannerNode")
-__all__.append("analysis_nodeInserter")
+__all__.append("add_analysis_node")
+__all__.append("add_analysis_nodes")
 __all__.append("StatLats")
 __all__.append("StatLatsSetMember")
 __all__.append("TeapotStatLatsNode")
