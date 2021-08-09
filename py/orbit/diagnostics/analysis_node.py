@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import numpy as np
 
 from bunch import Bunch
@@ -76,30 +78,30 @@ class WireScanner1D(AnalysisNode):
         self.range = range
         self.frac_count_err = frac_count_err
         self.pos = []
-        self.raw = []
+        self.counts = []
 
-    def bin_data(self, data):
-        self.raw, bin_edges = np.histogram(data, bins=self.n_steps, range=self.range)
+    def scan(self, data):
+        self.counts, bin_edges = np.histogram(data, bins=self.n_steps, range=self.range)
         delta = np.mean(np.diff(bin_edges))
         self.pos = (bin_edges + 0.5 * delta)[:-1]
         if self.frac_count_err:
-            lo = self.raw * (1 - self.frac_count_err)
-            hi = self.raw * (1 + self.frac_count_err)
+            lo = self.counts * (1 - self.frac_count_err)
+            hi = self.counts * (1 + self.frac_count_err)
             noise = np.random.uniform(lo, hi).astype(int)
-            self.raw = np.clip(self.raw + noise, 0, None)
+            self.counts = np.clip(self.counts + noise, 0, None)
 
     def mean(self):
-        N = np.sum(self.raw)
-        return np.sum(self.raw * self.pos) / (N - 1)
+        N = np.sum(self.counts)
+        return np.sum(self.counts * self.pos) / (N - 1)
 
     def var(self):
-        N = np.sum(self.raw)
+        N = np.sum(self.counts)
         x_avg = self.mean()
-        x2_avg = np.sum(self.raw * self.pos**2) / (N - 1)
+        x2_avg = np.sum(self.counts * self.pos**2) / (N - 1)
         return x2_avg - x_avg**2 
 
 
-class WireScannerNode(AnalysisNode):
+class WireScannerNode(DriftTEAPOT):
     """Node to measure simulate wire-scanner measurement.
     
     Attributes
@@ -126,20 +128,24 @@ class WireScannerNode(AnalysisNode):
         Fractional error in bin counts. Each bin count C is updated to a random
         number in the range [C * (1 - frac_err), C * (1 + frac_err)]. For now,
         the counts are always kept above zero.
+    x, y, u : WireScanner1D
+        These represent each wire in the wire-scanner. Keep in mind that `x`
+        is actually a vertical wire, `y` is a horizontal wire, and `u` is a 
+        diagonal wire. The x, y, and u axes are perpendicular to the wires.
     """
     def __init__(self, n_steps=None, urange=None, diag_wire_angle=None,
-                 tilt_err=None, frac_count_err=None, name='wire-scanner'):
+                 diag_wire_angle_err=None, frac_count_err=None, name='wire-scanner'):
         DriftTEAPOT.__init__(self, name)  
         if n_steps is None:
             n_steps = 90
         if urange is None:
-            urange = (25.0, 292.0)
+            urange = (-0.1335, 0.1335)
         if diag_wire_angle is None:
-            diag_wire_angle = -0.25 * np.pi
+            diag_wire_angle = -np.radians(45.0)
         self.n_steps = n_steps
         self.diag_wire_angle = diag_wire_angle
         self.frac_count_err = frac_count_err
-        self.tilt_err = tilt_err
+        self.diag_wire_angle_err = diag_wire_angle_err
         self.phi = diag_wire_angle + np.radians(90)
         umin, umax = urange
         xmin = umin * np.cos(self.phi)
@@ -149,29 +155,29 @@ class WireScannerNode(AnalysisNode):
         self.xrange = (xmin, xmax)
         self.yrange = (ymin, ymax)
         self.urange = (umin, umax)
-        self.hor = WireScanner1D(self.n_steps, self.xrange, self.frac_count_err)
-        self.ver = WireScanner1D(self.n_steps, self.yrange, self.frac_count_err)
-        self.dia = WireScanner1D(self.n_steps, self.urange, self.frac_count_err)
-        self.wires = [self.hor, self.ver, self.dia]
+        self.xwire = WireScanner1D(self.n_steps, self.xrange, self.frac_count_err)
+        self.ywire = WireScanner1D(self.n_steps, self.yrange, self.frac_count_err)
+        self.uwire = WireScanner1D(self.n_steps, self.urange, self.frac_count_err)
+        self.wires = [self.xwire, self.ywire, self.uwire]
         
     def track(self, params_dict):
         """Track and compute histograms. Overwrites previous scan."""
-        
         bunch = params_dict['bunch']
-        X = bunch_coord_array(bunch, transverse_only=True, mm_mrad=True)
+        X = bunch_coord_array(bunch)
         xx = X[:, 0]
-        yy = X[:, 1]
-        uu = xx * np.cos(self.phi) + yy * np.sin(self.phi)        
-        self.hor.bin_data(xx)
-        self.ver.bin_data(yy)
-        self.dia.bin_data(uu)
+        yy = X[:, 2]
+        uu = xx * np.cos(self.phi) + yy * np.sin(self.phi) 
+        self.xwire.scan(xx)
+        self.ywire.scan(yy)
+        self.uwire.scan(uu)
         
     def get_moments(self):
         """Get xx, yy, and xy covariances from histograms."""
-        sig_xx = self.hor.var()
-        sig_yy = self.ver.var()
-        sig_uu = self.dia.var()
-        sn = np.sin(self.phi)
-        cs = np.cos(self.phi)
+        sig_xx = self.xwire.var()
+        sig_yy = self.ywire.var()
+        sig_uu = self.uwire.var()
+        phi = self.phi
+        sn = np.sin(phi)
+        cs = np.cos(phi)
         sig_xy = (sig_uu - sig_xx*cs**2 - sig_yy*sn**2) / (2 * sn * cs)
         return sig_xx, sig_yy, sig_xy

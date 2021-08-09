@@ -7,7 +7,8 @@ def bunch_coord_array(bunch, mm_mrad=False, transverse_only=False):
     n_parts = bunch.getSize()
     X = np.zeros((n_parts, 6))
     for i in range(n_parts):
-        X[i] = [bunch.x(i), bunch.xp(i), bunch.y(i), bunch.yp(i),
+        X[i] = [bunch.x(i), bunch.xp(i), 
+                bunch.y(i), bunch.yp(i), 
                 bunch.z(i), bunch.dE(i)]
     if mm_mrad:
         X[:, :4] *= 1000.
