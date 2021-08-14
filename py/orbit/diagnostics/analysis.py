@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import numpy as np
 from numpy import linalg as la
 
@@ -65,14 +67,24 @@ def twiss2D(Sigma):
         
     
 class BunchStats:
-    """Container for beam statistics."""
-    def __init__(self, X):
-        self.Sigma = np.cov(X.T)
+    """Container for bunch statistics."""
+    def __init__(self, Sigma):
+        self.Sigma = Sigma[:4, :4]
         self.moments = to_vec(self.Sigma)
         self.eps_1, self.eps_2 = intrinsic_emittances(self.Sigma)
         self.eps_x, self.eps_y = apparent_emittances(self.Sigma)
         self.alpha_x, self.alpha_y, self.beta_x, self.beta_y = twiss2D(self.Sigma)
         
+    def show(self, mm_mrad=False):
+        if mm_mrad:
+            print('eps_1, eps_2 = {} {} [m rad]'.format(1e6 * self.eps_1, 1e6 * self.eps_2))
+            print('eps_x, eps_y = {} {} [m rad]'.format(1e6 * self.eps_x, 1e6 * self.eps_y))
+        else:
+            print('eps_1, eps_2 = {} {} [m rad]'.format(self.eps_1, self.eps_2))
+            print('eps_x, eps_y = {} {} [m rad]'.format(self.eps_x, self.eps_y))
+        print('alpha_x, alpha_y = {} {} [rad]'.format(self.alpha_x, self.alpha_y))
+        print('beta_x, beta_y = {} {} [m/rad]'.format(self.beta_x, self.beta_y))
+
         
 class DanilovEnvelopeBunch:
     """Stores the Danilov envelope parameters and test particle coordinates.

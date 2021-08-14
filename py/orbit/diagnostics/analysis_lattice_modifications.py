@@ -3,7 +3,6 @@ from analysis_node import AnalysisNode
 from analysis_node import BunchMonitorNode
 from analysis_node import BunchStatsNode
 from analysis_node import DanilovEnvelopeBunchMonitorNode
-from analysis_node import WireScannerNode
 from orbit.lattice import AccLattice
 from orbit.lattice import AccNode
 from orbit.teapot import DriftTEAPOT
@@ -13,7 +12,6 @@ NAMETAGS = {
     BunchMonitorNode: 'bunch_monitor',
     BunchStatsNode: 'bunch_stats',
     DanilovEnvelopeBunchMonitorNode: 'danilov_envelope_bunch_monitor',
-    WireScannerNode: 'wire-scanner',
 }
 
 
