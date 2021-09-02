@@ -13,7 +13,7 @@ class ConstantWaveform:
 
 class LinearWaveform:
     
-    def __init__(self, syncpart, lat_length, t1, t2, amp1, amp2):
+    def __init__(self, syncpart, t1, t2, amp1, amp2):
         self.name = 'linear waveform'
         self.syncpart = syncpart
         self.t1, self.t2, self.amp1, self.amp2 = t1, t2, amp1, amp2
@@ -25,7 +25,7 @@ class LinearWaveform:
         elif t > self.t2:
             amp = self.amp2
         else:
-            dt = (time - self.t1) / (self.t2 - self.t1)
+            dt = (t - self.t1) / (self.t2 - self.t1)
             amp = (self.amp2 - self.amp1) * dt + self.amp1
         return amp
     
