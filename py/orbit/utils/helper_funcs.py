@@ -1,4 +1,5 @@
 """Helper functions for PyORBIT scripts."""
+from __future__ import print_function
 import numpy as np
 from numpy import linalg as la
 from scipy import optimize as opt
@@ -199,7 +200,7 @@ def transfer_matrix(lattice, mass, energy):
     return M
     
     
-def twiss_at_injection(lattice, mass, energy):
+def twiss_at_entrance(lattice, mass, energy):
     """Get 2D Twiss parameters at lattice entrance.
     
     Parameters

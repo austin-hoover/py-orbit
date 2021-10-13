@@ -7,6 +7,15 @@ def delete_files_not_folders(path):
     for root, folders, files in os.walk(path):
         for file in files:
             os.remove(os.path.join(root, file))
+            
+
+def ancestor_folder_path(current_path, ancestor_folder_name):  
+    parent_path = os.path.dirname(current_path)
+    if parent_path == current_path:
+        raise ValueError("Couldn't find ancestor folder.")
+    if parent_path.split('/')[-1] == ancestor_folder_name:
+        return parent_path
+    return ancestor_folder_path(parent_path, ancestor_folder_name)
 
 
 def tprint(string, indent=4):
