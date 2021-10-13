@@ -19,23 +19,19 @@ from orbit.bumps import simpleBump
 
 
 class TeapotSimpleBumpNode(DriftTEAPOT):
-	""" 
-	The kicker node class for TEAPOT lattice
-	"""
-	def __init__(self, bunch, xbump, xpbump, ybump, ypbump, name = "bump"):
-		"""
-		Constructor. Creates the Bumpe TEAPOT element.
-		"""
-		DriftTEAPOT.__init__(self,name)
-		self.simplebump = simpleBump(bunch, xbump, xpbump, ybump, ypbump);
-		self.setType("Bump")
-		self.setLength(0.0)
+    """ 
+    The kicker node class for TEAPOT lattice
+    """
+    def __init__(self, bunch, xbump, xpbump, ybump, ypbump, waveform=None, name="bump"):
+        """Constructor. Creates the Bump TEAPOT element."""
+        DriftTEAPOT.__init__(self, name)
+        self.simplebump = simpleBump(bunch, xbump, xpbump, ybump, ypbump, waveform);
+        self.setType("Bump")
+        self.setLength(0.0)
 
-	def track(self, paramsDict):
-		"""
-		The simplebump-teapot class implementation of the AccNodeBunchTracker class track(probe) method.
-		"""
-		length = self.getLength(self.getActivePartIndex())
-		bunch = paramsDict["bunch"]
-		self.simplebump.bump()
+    def track(self, paramsDict):
+        """The simplebump-teapot class implementation of the AccNodeBunchTracker class track(probe) method."""
+        length = self.getLength(self.getActivePartIndex())
+        bunch = paramsDict["bunch"]
+        self.simplebump.bump()
 
