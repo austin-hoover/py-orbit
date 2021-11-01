@@ -9,19 +9,19 @@ from orbit.teapot import DriftTEAPOT
 
 class AnalysisNode(DriftTEAPOT):
     
-    def __init__(self, name):
+    def __init__(self, name, skip=0):
         DriftTEAPOT.__init__(self, name)
         self.setLength(0.0)
         self.position = None
         self.kind = None
         self.data = []
+        self.turn = 0
+        self.turns_stored = []
+        self.skip = skip
         
     def set_position(self, position):
         self.position = position
-        
-    def track(self, params_dict):
-        return
-        
+                
     def get_data(self, turn='all'):
         if turn == 'all':
             return self.data
@@ -29,41 +29,55 @@ class AnalysisNode(DriftTEAPOT):
     
     def clear_data(self):
         self.data = []
+        
+    def should_store(self):
+        return self.turn % (self.skip + 1) == 0
     
                     
 class BunchMonitorNode(AnalysisNode):
     
-    def __init__(self, name='bunch_monitor', mm_mrad=False, transverse_only=True):
-        AnalysisNode.__init__(self, name)
+    def __init__(self, name='bunch_monitor', mm_mrad=False, transverse_only=True, skip=0):
+        AnalysisNode.__init__(self, name, skip)
         self.mm_mrad = mm_mrad
         self.transverse_only = transverse_only
         
     def track(self, params_dict):
-        bunch = params_dict['bunch']
-        X = bunch_coord_array(bunch, self.mm_mrad, self.transverse_only)
-        self.data.append(X)
+        if self.should_store():
+            bunch = params_dict['bunch']
+            X = bunch_coord_array(bunch, self.mm_mrad, self.transverse_only)
+            self.data.append(X)
+            self.turns_stored.append(self.turn)
+        self.turn += 1
         
     
 class BunchStatsNode(AnalysisNode):
     
-    def __init__(self, name='bunch_stats', mm_mrad=False):
-        AnalysisNode.__init__(self, name)
+    def __init__(self, name='bunch_stats', mm_mrad=False, skip=0):
+        AnalysisNode.__init__(self, name, skip)
         self.mm_mrad = mm_mrad
         
     def track(self, params_dict):
-        bunch = params_dict['bunch']
-        X = bunch_coord_array(bunch, self.mm_mrad, transverse_only=True)
-        Sigma = np.cov(X.T)
-        self.data.append(BunchStats(Sigma))
+        if self.should_store():
+            bunch = params_dict['bunch']
+            X = bunch_coord_array(bunch, self.mm_mrad, transverse_only=True)
+            Sigma = np.cov(X.T)
+            bunch_stats = BunchStats(Sigma)
+            self.data.append(bunch_stats)
+            self.turns_stored.append(self.turn)
+        self.turn += 1
         
         
 class DanilovEnvelopeBunchMonitorNode(AnalysisNode):
     
-    def __init__(self, name='envelope_monitor', mm_mrad=False):
-        AnalysisNode.__init__(self, name)
+    def __init__(self, name='envelope_monitor', mm_mrad=False, skip=0):
+        AnalysisNode.__init__(self, name, skip)
         self.mm_mrad = mm_mrad
         
     def track(self, params_dict):
-        bunch = params_dict['bunch']
-        X = bunch_coord_array(bunch, self.mm_mrad, transverse_only=True)
-        self.data.append(DanilovEnvelopeBunch(X))
+        if self.should_store():
+            bunch = params_dict['bunch']
+            X = bunch_coord_array(bunch, self.mm_mrad, transverse_only=True)
+            env_bunch = DanilovEnvelopeBunch(X)
+            self.data.append(env_bunch)
+            self.turns_stored.append(self.turn)
+        self.turn += 1
