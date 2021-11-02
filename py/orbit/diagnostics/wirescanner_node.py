@@ -5,6 +5,15 @@ from analysis import bunch_coord_array
 from orbit.teapot import DriftTEAPOT
 
 
+def get_bin_centers(bin_edges):
+    return 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+
+def get_bin_edges(bin_centers):
+    delta = abs(np.diff(bin_centers)[0])
+    return np.hstack([bin_centers - 0.5 * delta, [bin_centers[-1] + 0.5 * delta]])
+
+
 class Wire:
     """Represents a single wire.
     
@@ -23,21 +32,20 @@ class Wire:
     """
     def __init__(self, n_steps, limits, rms_frac_count_err=None):
         self.n_steps = n_steps
-        self.limits = limits
+        self.limits = limits    
+        self.pos = np.linspace(limits[0], limits[1], n_steps)
+        self.edges = get_bin_edges(self.pos)
         self.rms_frac_count_err = rms_frac_count_err
-        self.pos = []
         self.signal = []
 
     def scan(self, data):
         """Record a histogram of the data array. (Overwrites stored data.)"""
-        self.signal, bin_edges = np.histogram(data, self.n_steps, self.limits)
-        delta = np.mean(np.diff(bin_edges))
-        self.pos = (bin_edges + 0.5 * delta)[:-1]
+        self.signal, _ = np.histogram(data, bins=self.edges)
         if self.rms_frac_count_err:
-            noise = np.random.normal(scale=self.rms_frac_count_err, size=len(self.signal))
+            noise = np.random.normal(scale=self.rms_frac_count_err, size=self.n_steps)
             self.signal = self.signal * (1.0 + noise)
             self.signal = self.signal.astype(int)
-            self.signal = np.clip(self.signal, 0, None)
+            self.signal = np.clip(self.signal, 0.0, None)
 
     def mean(self):
         """Estimate the mean of the data from the histogram."""
@@ -122,7 +130,7 @@ class WireScannerNode(DriftTEAPOT):
         sig_yy = self.ywire.var()
         sig_uu = self.uwire.var()
         phi = self.phi
-        if assumed_angle:
+        if assumed_angle is not None:
             phi = assumed_angle
         cs, sn = np.sin(phi), np.cos(phi)
         sig_xy = (sig_uu - sig_xx*cs**2 - sig_yy*sn**2) / (2 * sn * cs)
