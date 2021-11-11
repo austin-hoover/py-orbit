@@ -54,6 +54,12 @@ def apparent_emittances(Sigma):
     eps_x = np.sqrt(la.det(Sigma[:2, :2]))
     eps_y = np.sqrt(la.det(Sigma[2:, 2:]))
     return eps_x, eps_y
+
+
+def emittances(Sigma):
+    eps_x, eps_y = apparent_emittances(Sigma)
+    eps_1, eps_2 = intrinsic_emittances(Sigma)
+    return eps_x, eps_y, eps_1, eps_2
     
     
 def twiss2D(Sigma):

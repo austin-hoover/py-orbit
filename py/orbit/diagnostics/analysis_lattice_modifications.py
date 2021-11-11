@@ -32,7 +32,11 @@ def node_index_position_list(lattice, min_sep=1e-5):
 
 def add_analysis_node(constructor, lattice, parent_node, **constructor_kws):
     """Create/insert analysis node at one point in the lattice.
-
+    
+    One thing to note is that the tilt angle is set to the negative of the 
+    parent node tilt angle. This is because PyORBIT treats tilted nodes by 
+    rotating the bunch coordinates before tracking.
+    
     Parameters
     ----------
     constructor : AnalysisNode subclass
@@ -44,6 +48,7 @@ def add_analysis_node(constructor, lattice, parent_node, **constructor_kws):
         The parent node of the analysis node. Can also just provide its name.
     dense: bool
         Whether to insert at every part of every node rather than just at every node.
+        (Not currently implemented.)
     **constructor_kws
         Key word arguments passed to the analysis node constructor.
     """
