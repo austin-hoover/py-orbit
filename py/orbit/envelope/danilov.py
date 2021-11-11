@@ -1,37 +1,37 @@
-"""
-This module contains functions related to the envelope parameterization of
-the {2, 2} Danilov distribution.
+"""Methods related to the {2, 2} Danilov distribution envelope model.
 
 References
 ----------
 [1] https://doi.org/10.1103/PhysRevSTAB.6.094202
 [2] https://doi.org/10.1103/PhysRevAccelBeams.24.044201
 """
+from __future__ import print_function
 import time
 import copy
 
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
-from tqdm import trange, tqdm
+from tqdm import trange
+from tqdm import tqdm
 
 from bunch import Bunch
-from orbit.space_charge.envelope import set_env_solver_nodes, set_perveance
 from orbit.twiss import twiss
 from orbit.twiss import bogacz_lebedev as bl
 from orbit.utils import helper_funcs as hf
-from orbit.utils.consts import mass_proton, pi
+from orbit.utils.consts import mass_proton
+from orbit.utils.consts import pi
 from orbit.utils.general import tprint
 
 
-# Define bounds on 4D Twiss parameters
+# Define bounds on 4D Twiss parameters. 
 pad = 1e-5
 alpha_min, alpha_max = -np.inf, np.inf
 beta_min, beta_max = pad, np.inf
 nu_min, nu_max = pad, pi - pad
 u_min, u_max = pad, 1 - pad
-twiss4D_lb = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
-twiss4D_ub = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
+TWISS4D_LB = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
+TWISS4D_UB = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
 
 
 def moment_vector(Sigma):
@@ -541,7 +541,7 @@ class DanilovEnvelope:
         # Get linear transfer matrix
         M = self.transfer_matrix(lattice)
         if not twiss.is_stable(M):
-            print 'WARNING: transfer matrix is not stable.'
+            print('WARNING: transfer matrix is not stable.')
         # Match to the lattice
         if method == 'auto':
             lattice_is_coupled = twiss.unequal_eigtunes(M)
@@ -612,8 +612,8 @@ class DanilovEnvelope:
         elif method == 'auto':
             result = self._match_lsq(lattice, **kws)
             if result.cost > tol:
-                print "Cost = {:.2e} > tol.".format(result.cost)
-                print "Trying 'replace by average' method."
+                print("Cost = {:.2e} > tol.".format(result.cost))
+                print("Trying 'replace by average' method.")
                 initialize()
                 result = self._match_replace_avg(lattice, **kws)
             return result
@@ -654,7 +654,7 @@ class DanilovEnvelope:
             return self._residuals(lattice)
         
         result = opt.least_squares(cost_func, self.twiss4D(), 
-                                   bounds=(twiss4D_lb, twiss4D_ub), **kws)
+                                   bounds=(TWISS4D_LB, TWISS4D_UB), **kws)
         self.set_twiss4D(result.x)
         return result
 
@@ -748,13 +748,13 @@ class DanilovEnvelope:
         lo, hi = 1.0 - radius, 1.0 + radius
         twiss_params = self.twiss4D()
         twiss_params = np.random.uniform(lo * twiss_params, hi * twiss_params)
-        twiss_params = np.clip(twiss_params, twiss4D_lb, twiss4D_ub)
+        twiss_params = np.clip(twiss_params, TWISS4D_LB, TWISS4D_UB)
         self.set_twiss4D(twiss_params)
         
     def print_twiss2D(self, indent=4):
         alpha_x, alpha_y, beta_x, beta_y = self.twiss2D()
         eps_x, eps_y = self.apparent_emittances()
-        print '2D Twiss parameters:'
+        print('2D Twiss parameters:')
         tprint('alpha_x, alpha_y = {:.3f}, {:.3f} [rad]'.format(alpha_x, alpha_y))
         tprint('beta_x, beta_y = {:.3f}, {:.3f} [m]'.format(beta_x, beta_y))
         tprint('eps_x, eps_y = {:.3e}, {:.3e} [m rad]'.format(eps_x, eps_y))
@@ -762,7 +762,7 @@ class DanilovEnvelope:
     def print_twiss4D(self):
         alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu = self.twiss4D()
         eps_1, eps_2 = self.intrinsic_emittances()
-        print '4D Twiss parameters:'
+        print('4D Twiss parameters:')
         tprint('mode (l) = {}'.format(self.mode))
         tprint('alpha_lx, alpha_ly = {:.3f}, {:.3f} [rad]'.format(alpha_lx, alpha_ly))
         tprint('beta_lx, beta_ly = {:.3f}, {:.3f} [m]'.format(beta_lx, beta_ly))
@@ -780,8 +780,8 @@ class MatchingResult:
 
         
 def print_header():
-    print '{0:^15}{1:^15}{2:^15}{3:^15}'.format(
-        'Iteration', 'Cost', 'Cost reduction', 'Step norm')
+    print('{0:^15}{1:^15}{2:^15}{3:^15}'.format(
+          'Iteration', 'Cost', 'Cost reduction', 'Step norm'))
 
     
 def print_iteration(iteration, cost, cost_reduction, step_norm):
@@ -795,5 +795,5 @@ def print_iteration(iteration, cost, cost_reduction, step_norm):
     else:
         step_norm = '{0:^15.2e}'.format(step_norm)
 
-    print '{0:^15}{1:^15.4e}{2}{3}'.format(
-        iteration, cost, cost_reduction, step_norm)
+    print('{0:^15}{1:^15.4e}{2}{3}'.format(
+          iteration, cost, cost_reduction, step_norm))

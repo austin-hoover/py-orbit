@@ -1,5 +1,5 @@
 from spacecharge import DanilovEnvSolver
-from orbit.space_charge.envelope import EnvSolverNode
+from orbit.space_charge.envelope import DanilovEnvSolverNode
 from orbit.lattice import AccLattice
 from orbit.lattice import AccNode
 from orbit.lattice import AccActionsContainer
@@ -29,12 +29,12 @@ def set_env_solver_nodes(lattice, perveance, max_sep=0.01, min_sep=1e-6):
         
     Returns
     -------
-    list[EnvSolverNode]
+    list[DanilovEnvSolverNode]
         List of the inserted envelope solver nodes.
     """
     lattice.split(max_sep)
     solver = DanilovEnvSolver(perveance)
-    solver_nodes = setSC_General_AccNodes(lattice, min_sep, solver, EnvSolverNode)
+    solver_nodes = setSC_General_AccNodes(lattice, min_sep, solver, DanilovEnvSolverNode)
     for solver_node in solver_nodes:
         name = ''.join([solver_node.getName(), ':', 'envsolver'])
         solver_node.setName(name)
