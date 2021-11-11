@@ -107,7 +107,7 @@ def get_eigtunes(M):
     ndarray, shape (2,)
         Eigentunes for the two modes.
     """
-    return np.arccos(la.eigvals(M).real)[[0, 2]]
+    return np.arccos(la.eigvals(M).real)[[0, 2]] / (2 * np.pi)
     
 
 def unequal_eigtunes(M, tol=1e-5):
