@@ -166,7 +166,7 @@ def fodo_lattice(mux, muy, L, fill_fac=0.5, angle=0, start='drift', fringe=False
     def cost(kvals, correct_tunes, mass=0.93827231, energy=1):
         lattice = fodo(*kvals)
         M = transfer_matrix(lattice, mass, energy)
-        return correct_phase_adv - np.degrees(get_eigtunes(M))
+        return correct_phase_adv - 360. * get_eigtunes(M)
 
     correct_phase_adv = np.array([mux, muy])
     k0 = np.array([0.5, 0.5]) # ~ 80 deg phase advance
