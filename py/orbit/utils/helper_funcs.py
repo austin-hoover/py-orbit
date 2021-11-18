@@ -46,7 +46,7 @@ def get_intensity(perveance, mass, kin_energy, bunch_length):
     """Return intensity from perveance."""
     gamma = 1 + (kin_energy / mass) # Lorentz factor
     beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
-    return beta**2 * gamma**3 * perveance / (2 * classical_proton_radius)
+    return beta**2 * gamma**3 * perveance * bunch_length / (2 * classical_proton_radius)
     
     
 def get_Brho(mass, kin_energy):
@@ -417,7 +417,7 @@ def coasting_beam(kind, n_parts, twiss_params, emittances, length, mass,
     """
     bunch = Bunch()
     bunch.mass(mass)
-    bunch.macroSize(int(intensity / length) if intensity > 0 else 1)
+    bunch.macroSize(int(intensity / n_parts) if intensity > 0 else 1)
     bunch.getSyncParticle().kinEnergy(kin_energy)
     params_dict = {'bunch': bunch}
     constructors = {'kv':KVDist2D,
