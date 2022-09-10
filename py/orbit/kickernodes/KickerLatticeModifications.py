@@ -7,22 +7,22 @@ from orbit.utils import orbitFinalize
 # import general accelerator elements and lattice
 from orbit.lattice import AccLattice, AccNode, AccActionsContainer, AccNodeBunchTracker
 
-# import Teapot bump node
-import orbit.bumps
-from TeapotBumpNode import TeapotSimpleBumpNode, TDTeapotSimpleBumpNode
+# import Teapot kicker node
+import orbit.kickernodes
+from TeapotKickerNode import TeapotXKickerNode, TeapotYKickerNode
 
 # import teapot drift class
 from orbit.teapot import DriftTEAPOT
 
-def addTeapotBumpNode(lattice, position, bump_node):
+def addTeapotKickerNode(lattice, position, kicker_node):
 	"""
-	It will put one Teapot bump node in the lattice
+	It will put one Teapot kicker node in the lattice 
 	"""
 	length_tolerance = 0.0001
 	lattice.initialize()
 	position_start = position
-	position_stop = position + bump_node.getLength()
-	(node_start_ind,node_stop_ind,z,ind) = (-1,-1, 0., 0.)
+	position_stop = position + kicker_node.getLength()
+	(node_start_ind,node_stop_ind,z,ind) = (-1,-1, 0., 0)
 	for node in lattice.getNodes():
 		if(position_start >= z and position_start <= z + node.getLength()):
 			node_start_ind = ind
@@ -35,16 +35,16 @@ def addTeapotBumpNode(lattice, position, bump_node):
 	for node in lattice.getNodes()[node_start_ind:node_stop_ind+1]:
 		#print "debug node=",node.getName()," type=",node.getType()," L=",node.getLength()
 		if(not isinstance(node,DriftTEAPOT)):
-			print "Non-drift node=", node.getName()," type=",node.getType()," L=",node.getLength()
-			orbitFinalize("We have non-drift element at the place of the bump node! Stop!")
+			print "Non-drift node=",node.getName()," type=",node.getType()," L=",node.getLength()
+			orbitFinalize("We have non-drift element at the place of the kicker node! Stop!")
 		if(node.getNumberOfChildren() != 4):
 			print "Node=",node.getName()," type=",node.getType()," L=",node.getLength()," N children nodes=",node.getNumberOfChildren()
 			orbitFinalize("Drift element was modified with additional functionality (SC or something else)! Add collimation first! Stop!")
-	# make array of nodes from bump node in the center and possible two drifts if their length is more than length_tollerance [m]
-	nodes_new_arr = [bump_node,]
+	# make array of nodes from kicker node in the center and possible two drifts if their length is more than length_tollerance [m]
+	nodes_new_arr = [kicker_node,]
 	drift_node_start = lattice.getNodes()[node_start_ind]
 	drift_node_stop = lattice.getNodes()[node_stop_ind]	
-	#------now we will create two drift nodes: before the bump node and after
+	#------now we will create two drift nodes: before the kicker node and after
 	#------if the length of one of these additional drifts less than length_tollerance [m] we skip this drift 
 	if(position_start > lattice.getNodePositionsDict()[drift_node_start][0] +  length_tolerance):
 		drift_node_start_new = DriftTEAPOT(drift_node_start.getName())
