@@ -11,6 +11,7 @@
 #include <cfloat>
 #include <cstdlib>
 
+#include "ParticleInitialCoordinates.hh"
 
 ///////////////////////////////////////////////////////////////////////////
 //
@@ -54,7 +55,6 @@ Foil::Foil(double xmin, double xmax, double ymin, double ymax, double thick): Cp
 //
 // PARAMETERS
 //	Bunch - The particle bunch
-//  LostBunch 
 //
 // RETURNS
 //   int.
@@ -64,12 +64,11 @@ Foil::Foil(double xmin, double xmax, double ymin, double ymax, double thick): Cp
 void Foil::traverseFoilSimpleScatter(Bunch* bunch){
 
 	double BohrRadius=0.52917706e-8;  // hydrogenic Bohr radius in cm
-	double hBar = 1.0545887e-27;      // Planck's constant in erg-sec
-	double echarge = 4.803242e-10;    // in esu or statcoulombs
-	double nAvogadro = 6.022045e23;
-	double deg2Rad = 1.74532925e-2;
-	double rhofoil = 2.265;
+	double hBar = 1.054571817e-27;    // Planck's constant in erg-sec
+	double echarge = 4.80320425e-10;  // in esu or statcoulombs
+	double nAvogadro = 6.0221408e23;
 	double muScatter = 1.35;
+	double emass = 9.1093837e-28;
 	double pInj0;
 	long idum = (unsigned)time(0);
 	idum = -idum;
@@ -81,12 +80,12 @@ void Foil::traverseFoilSimpleScatter(Bunch* bunch){
 	
     // Momentum in g*cm/sec
 	SyncPart* syncPart = bunch->getSyncPart();
-    pInj0 = 1.6726e-22 * syncPart->getMass()/OrbitConst::mass_proton * syncPart->getBeta() *
-	syncPart->getGamma() * OrbitConst::c;
+	pInj0 = 1.6726e-22 * syncPart->getMass() / OrbitConst::mass_proton *
+            syncPart->getBeta() * syncPart->getGamma() * OrbitConst::c;
 	
     // Thomas-Fermi atom radius (cm):
 	
-    double TFRadius = muScatter *  BohrRadius *pow(OrbitUtils::get_z(ma_), -0.33333);
+    double TFRadius = muScatter *  BohrRadius * pow(OrbitUtils::get_z(ma_), -0.33333);
 	
     // Minimum scattering angle:
 	
@@ -94,7 +93,7 @@ void Foil::traverseFoilSimpleScatter(Bunch* bunch){
 	
     // Theta max as per Jackson (13.102)
 	
-    double thetaScatMax = 274.e5 * OrbitConst::mass_electron * OrbitConst::c /
+    double thetaScatMax = 274.0 * emass * 100.0 * OrbitConst::c /
 	(pInj0 * pow(OrbitUtils::get_a(ma_), 0.33333));
 	
     double pv = 1.e2 * pInj0 * syncPart->getBeta() * OrbitConst::c;
@@ -139,6 +138,7 @@ void Foil::traverseFoilSimpleScatter(Bunch* bunch){
 				double phi = 2*OrbitConst::PI * random1;
 				random1 = Random::ran1(idum);
 				double theta = thetaScatMin * sqrt(random1 / (1. - random1));
+				if(theta > 2.0 * thetaScatMax) theta = 2.0 * thetaScatMax;
 				thetaX += theta * cos(phi);
 				thetaY += theta * sin(phi);
 				//cout << thetaX <<"\n";
@@ -175,7 +175,7 @@ void Foil::traverseFoilFullScatter(Bunch* bunch, Bunch* lostbunch){
 	double nAvogadro = 6.022045e23;
 	double random, choice, length, dlength, meanfreepath;
 	double rl, zrl, stepsize, radlengthfac, directionfac;
-	double t, dp_x=0.0, dp_y=0.0, thetax = 0.0, thetay = 0.0, thx = 0.0, thy = 0.0;
+	double t, dp_x=0.0, dp_y=0.0, thx = 0.0, thy = 0.0;
 	long idum = (unsigned)time(0);
 	idum = -idum;
 	
@@ -215,15 +215,8 @@ void Foil::traverseFoilFullScatter(Bunch* bunch, Bunch* lostbunch){
 				double pfac = Foil::getPFactor(part_coord_arr[ip], syncPart);
 				double ecross = OrbitUtils::get_elastic_crosssection((syncPart->getEnergy() + part_coord_arr[ip][5]), ma_);
 				double icross = OrbitUtils::get_inelastic_crosssection((syncPart->getEnergy() + part_coord_arr[ip][5]), ma_);
-				
-				if(step == 0){ //If first step, do an iteration with ecross and icross to get first stepsize and first rcross 
-					step++;
-					double totcross = icross + ecross;
-					meanfreepath = (OrbitUtils::get_a(ma_) / (nAvogadro * 1e3) / density / (totcross * 1.0e-28));
-					stepsize = -meanfreepath * log(Random::ran1(idum));
-				}
-				
-				double rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, density, idum, beta, 0, pfac, thetax, thetay);
+
+				double rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, density, idum, beta, 0, pfac, thx, thy);
 				double totcross = ecross + icross + rcross;
 				meanfreepath = OrbitUtils::get_a(ma_) / ((nAvogadro * 1e3) * density  * (totcross * 1.0e-28));
 				stepsize = -meanfreepath * log(Random::ran1(idum));
@@ -579,6 +572,38 @@ void Foil::loseParticle(Bunch* bunch, Bunch* lostbunch, int ip, int& nLost, int&
 
 	double** coords = bunch->coordArr();
 	lostbunch->addParticle(coords[ip][0], coords[ip][1], coords[ip][2], coords[ip][3], coords[ip][4], coords[ip][5]);
+	int lost_part_ind = lostbunch->getSize() - 1;
+	
+	if (bunch->hasParticleAttributes("ParticleIdNumber") > 0) {
+		if (lostbunch->hasParticleAttributes("ParticleIdNumber") <= 0) {
+			std::map<std::string,double> part_attr_dict;
+			lostbunch->addParticleAttributes("ParticleIdNumber",part_attr_dict);
+		}	
+		lostbunch->getParticleAttributes("ParticleIdNumber")->attValue(lost_part_ind, 0) = bunch->getParticleAttributes("ParticleIdNumber")->attValue(ip,0);
+	}
+	
+	if (bunch->hasParticleAttributes("ParticleInitialCoordinates") > 0) {
+		if (lostbunch->hasParticleAttributes("ParticleInitialCoordinates") <= 0) {
+			std::map<std::string,double> part_attr_dict;
+			lostbunch->addParticleAttributes("ParticleInitialCoordinates",part_attr_dict);
+		}
+		ParticleInitialCoordinates* partAttr = (ParticleInitialCoordinates*) bunch->getParticleAttributes("ParticleInitialCoordinates");
+		ParticleInitialCoordinates* partAttr_lost = (ParticleInitialCoordinates*) lostbunch->getParticleAttributes("ParticleInitialCoordinates");
+		for(int j=0; j < 6; ++j){
+			partAttr_lost->attValue(lost_part_ind,j) = partAttr->attValue(ip,j);
+		}
+
+		if (bunch->hasParticleAttributes("TurnNumber") > 0) {
+			if (lostbunch->hasParticleAttributes("TurnNumber") <= 0) {
+				std::map<std::string,double> part_attr_dict;
+				lostbunch->addParticleAttributes("TurnNumber",part_attr_dict);
+			}
+			std::string attr_name_str("TurnNumber");
+			double turn = 1.0*bunch->getBunchAttributeInt(attr_name_str);
+			lostbunch->getParticleAttributes("TurnNumber")->attValue(lostbunch->getSize() - 1, 0) = turn;
+		}
+	}
+	
 	bunch->deleteParticleFast(ip);
 	nLost++;
 	foil_flag = 0;

@@ -11,6 +11,7 @@ from analysis_node import BunchStatsNode
 from analysis_node import DanilovEnvelopeBunchMonitorNode
 from diagnostics import StatLats, StatLatsSetMember
 from diagnostics import Moments, MomentsSetMember
+from orbit.diagnostics.profiles import profiles
 from diagnosticsLatticeModifications import addTeapotDiagnosticsNode
 from diagnosticsLatticeModifications import addTeapotDiagnosticsNodeAsChild
 from diagnosticsLatticeModifications import addTeapotStatLatsNodeSet
@@ -43,7 +44,11 @@ __all__.append("addTeapotDiagnosticsNodeAsChild")
 __all__.append("addTeapotStatLatsNodeSet")
 __all__.append("addTeapotMomentsNodeSet")
 __all__.append("TeapotTuneAnalysisNode")
+<<<<<<< HEAD
 __all__.append("WireScannerNode")
 
 
 
+=======
+__all__.append("profiles")
+>>>>>>> 2075d48c3e24d13377433393913eebb9cbb3d8ef

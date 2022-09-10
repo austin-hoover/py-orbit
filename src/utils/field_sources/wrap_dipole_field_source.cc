@@ -1,11 +1,11 @@
-#include <iostream>
-
 #include "orbit_mpi.hh"
 #include "pyORBIT_Object.hh"
 #include "wrap_spacecharge.hh"
 
 #include "wrap_utils.hh"
 #include "DipoleFieldSource.hh"
+
+#include <iostream>
 
 using namespace OrbitUtils;
 using namespace wrap_orbit_utils;
@@ -69,7 +69,7 @@ extern "C" {
 	  return Py_BuildValue("(ddd)",fieldX,fieldY,fieldZ);
   }	 
   
-  /** Sets or returns X,Y,Z axis symmetries */
+  /** Returns X,Y,Z electric and magnetic fields as a function of x,y,z */
   static PyObject* DipoleFieldSource_getFields(PyObject *self, PyObject *args){
   	DipoleFieldSource* cpp_fieldSource = (DipoleFieldSource*)((pyORBIT_Object*) self)->cpp_obj;
   	double x,y,z;
