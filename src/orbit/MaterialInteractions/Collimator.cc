@@ -11,6 +11,7 @@
 #include <cfloat>
 #include <cstdlib>
 
+#include "ParticleInitialCoordinates.hh"
 
 // Constructor
 ///////////////////////////////////////////////////////////////////////////
@@ -26,7 +27,7 @@
 //   length: length in m
 //   ma:	 material number. (0=carbon, 1=aluminum, 2=iron, 3=copper, 4=tantalum, 5=tungstun,
 //           6=platinum, 7=lead, ma>=8 = black absorber)
-//   densityfac: density factor (for materials mixed with air or water). 1.0 for pure. 
+//   density_fac: density factor (for materials mixed with air or water). 1.0 for pure. 
 //   shape:  shape of the collimator: 1=circle, 2=ellipse, 3=one sided
 //           flat, 4=two sided flat, 5=rectangular (outside is collimator),
 //           6=rectangular (inside is collimator).
@@ -63,12 +64,12 @@ Collimator::Collimator(double length, int ma,
 }
 
 void Collimator::collimateBunch(Bunch* bunch, Bunch* lostbunch){
-
+	
 	int j = 1, coll_flag = 0, lastArg, trackit;
 	double nAvogadro = 6.022045e23;
 	double random, choice, length, dlength, meanfreepath, b_pN;
 	double rl, zrl, stepsize, smallstep, radlengthfac, directionfac;
-	double t, dp_x=0.0, dp_y=0.0, thetax = 0.0, thetay = 0.0, thx = 0.0, thy = 0.0;
+	double t, dp_x=0.0, dp_y=0.0, thx = 0.0, thy = 0.0;
 	long idum = (unsigned)time(0);
 	idum = -idum;
 	
@@ -84,6 +85,7 @@ void Collimator::collimateBunch(Bunch* bunch, Bunch* lostbunch){
 	double z = OrbitUtils::get_z(ma_);
 	double a = OrbitUtils::get_a(ma_);
 	double density = OrbitUtils::get_rho(ma_);
+	double eff_density = density * density_fac_;
 	if(a <= 62.) b_pN = 14.5 * pow(a, 0.6666667);
 	if(a >  62.) b_pN = 60.0 * pow(a, 0.3333333);
 	
@@ -129,17 +131,10 @@ void Collimator::collimateBunch(Bunch* bunch, Bunch* lostbunch){
 				double pfac = Collimator::getPFactor(part_coord_arr[ip], syncPart);
 				double ecross = OrbitUtils::get_elastic_crosssection((syncPart->getEnergy() + part_coord_arr[ip][5]), ma_);
 				double icross = OrbitUtils::get_inelastic_crosssection((syncPart->getEnergy() + part_coord_arr[ip][5]), ma_);
-				
-				if(step == 0){ //If first step, do an iteration with ecross and icross to get first stepsize and first rcross 
-					step++;
-					double totcross = icross + ecross;
-					meanfreepath = (OrbitUtils::get_a(ma_) / (nAvogadro * 1000.0) / (density * density_fac_) / (totcross * 1.0e-28));
-					stepsize = -meanfreepath * log(Random::ran1(idum));
-				}
-				
-				double rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, density, idum, beta, 0, pfac, thetax, thetay);
+
+				double rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, eff_density, idum, beta, 0, pfac, thx, thy);
 				double totcross = ecross + icross + rcross;
-				meanfreepath = OrbitUtils::get_a(ma_) / ((nAvogadro * 1000.0) * (density * density_fac_) * (totcross * 1.0e-28));
+				meanfreepath = OrbitUtils::get_a(ma_) / ((nAvogadro * 1000.0) * eff_density * (totcross * 1.0e-28));
 				stepsize = -meanfreepath * log(Random::ran1(idum));
 				
 				Collimator::checkStep(rl, radlengthfac, stepsize, part_coord_arr[ip], syncPart);
@@ -149,13 +144,13 @@ void Collimator::collimateBunch(Bunch* bunch, Bunch* lostbunch){
 					stepsize = rl + dlength;
 					Collimator::checkStep(rl, radlengthfac, stepsize, part_coord_arr[ip], syncPart);
 					if(stepsize < smallstep) stepsize = smallstep;
-					Collimator::takeStep(bunch, lostbunch, part_coord_arr[ip], syncPart, z, a, density, idum, stepsize, zrl, rl, coll_flag, ip);
+					Collimator::takeStep(bunch, lostbunch, part_coord_arr[ip], syncPart, z, a, eff_density, idum, stepsize, zrl, rl, coll_flag, ip);
 					
 					
 				}
 				
 				else{ //Take the step and allow nuclear scatter
-					Collimator::takeStep(bunch, lostbunch, part_coord_arr[ip], syncPart, z, a, density, idum, stepsize, zrl, rl, coll_flag, ip);
+					Collimator::takeStep(bunch, lostbunch, part_coord_arr[ip], syncPart, z, a, eff_density, idum, stepsize, zrl, rl, coll_flag, ip);
 				
 					//If it still exists after MCS and energy loss, nuclear scatter
 					if(coll_flag==1 && zrl > 0){
@@ -166,7 +161,7 @@ void Collimator::collimateBunch(Bunch* bunch, Bunch* lostbunch){
 						
 						ecross = OrbitUtils::get_elastic_crosssection((syncPart->getEnergy() + part_coord_arr[ip][5]), ma_);
 						icross = OrbitUtils::get_inelastic_crosssection((syncPart->getEnergy() + part_coord_arr[ip][5]), ma_);
-						rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, density, idum, beta, 0, pfac, thx, thy);
+						rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, eff_density, idum, beta, 0, pfac, thx, thy);
 						
 						totcross = ecross + icross + rcross;
 						
@@ -195,7 +190,7 @@ void Collimator::collimateBunch(Bunch* bunch, Bunch* lostbunch){
 						// Rutherford Coulomb scattering
 						if((choice > e_frac) && (choice <= (1 - i_frac)))
 						{
-							rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, density, idum, beta, 1, pfac, thx, thy);
+							rcross = MaterialInteractions::ruthScattJackson(stepsize, z, a, eff_density, idum, beta, 1, pfac, thx, thy);
 							
 							double xpfac = part_coord_arr[ip][1] / pfac;
 							double ypfac = part_coord_arr[ip][3] / pfac;
@@ -353,7 +348,6 @@ int Collimator::driftParticle(int coll_flag, double& zrl, double length, double*
 
 	while((coll_flag == 0) && (zrl > 0))
 	{
-		
 		if(stepsize > length / 10.) stepsize = length / 10.;
 		if(stepsize - zrl > eps) stepsize = zrl + dlength;
 				
@@ -369,10 +363,12 @@ int Collimator::driftParticle(int coll_flag, double& zrl, double length, double*
 			  (pfac-1.0)* (pfac-1.0)* gamma2i) / 2.0;
 		phifac = (phifac * 1.0/pfac - (pfac-1.0) * gamma2i) * 1.0/pfac;
 		coords[4] -= stepsize * phifac;		
-		
-		nHits++;
-		if(coll_flag == 1) return 1;
 
+		if(coll_flag == 1)
+                {
+                  nHits++;
+                  return 1;
+                }
 	}
 
 	return 0;
@@ -704,7 +700,7 @@ double Collimator::getP(double* coords, SyncPart* syncpart){
 //   syncpart:	the relevant synchronous particle
 //	 z:			z number of material
 //	 a:			a number of material
-//	 density:	density of material
+//	 density:	density of material already corrected by density factor 
 //	 idum:		a random number seed
 //	 stepsize:	the stepsize to be taken
 //	 zrl:		remaining collimator length in the z direction
@@ -724,7 +720,7 @@ void Collimator::takeStep(Bunch* bunch, Bunch* lostbunch, double* coords, SyncPa
 
 	MaterialInteractions::mcsJackson(stepsize, z, a, density, idum, beta, pfac, coords[0], coords[2], coords[1], coords[3]);
 	double dE = MaterialInteractions::ionEnergyLoss(beta, z, a);
-	dE = -dE * density * density_fac_ * stepsize; //Factors for units m->cm and MeV->GeV
+	dE = -dE * density * stepsize; //Factors for units m->cm and MeV->GeV
 	coords[5] += dE;
 
 	if((coords[5] + syncpart->getEnergy()) < 0.02){ 
@@ -746,7 +742,9 @@ void Collimator::takeStep(Bunch* bunch, Bunch* lostbunch, double* coords, SyncPa
 //   Collimator::loseParticle
 //
 // DESCRIPTION
-//   Lose the particle from the alive bunch and add it to the lost bunch
+//   Lose the particle from the alive bunch and add it to the lost bunch.
+//   If the alive bunch has particle atributes Particle Ids or Initial
+//   Coordinates, the lost particle atributes will be copied to the lost bunch.
 //
 // PARAMETERS
 //	 coords: particle coordinates
@@ -763,13 +761,51 @@ void Collimator::takeStep(Bunch* bunch, Bunch* lostbunch, double* coords, SyncPa
 	
 void Collimator::loseParticle(Bunch* bunch, Bunch* lostbunch, int ip, int& nLost, int& coll_flag, double& zrl){
 	double** coords = bunch->coordArr();
-	lostbunch->addParticle(coords[ip][0], coords[ip][1], coords[ip][2], coords[ip][3], coords[ip][4], coords[ip][5]);
-	if (lostbunch->hasParticleAttributes("LostParticleAttributes") > 0) {
-		lostbunch->getParticleAttributes("LostParticleAttributes")->attValue(lostbunch->getSize() - 1, 0) = pos_ + (length_ - zrl); //absolute position in lattice where particle is lost
+
+	if(lostbunch != NULL){
+
+		lostbunch->addParticle(coords[ip][0], coords[ip][1], coords[ip][2], coords[ip][3], coords[ip][4], coords[ip][5]);
+		int lost_part_ind = lostbunch->getSize() - 1;
+		
+		if (lostbunch->hasParticleAttributes("LostParticleAttributes") <= 0) {
+			std::map<std::string,double> part_attr_dict;
+			lostbunch->addParticleAttributes("LostParticleAttributes",part_attr_dict);
+		}
+		//absolute position in lattice where particle is lost
+		lostbunch->getParticleAttributes("LostParticleAttributes")->attValue(lost_part_ind, 0) = pos_ + (length_ - zrl);
+		
+		if (bunch->hasParticleAttributes("ParticleIdNumber") > 0) {
+			if (lostbunch->hasParticleAttributes("ParticleIdNumber") <= 0) {
+				std::map<std::string,double> part_attr_dict;
+				lostbunch->addParticleAttributes("ParticleIdNumber",part_attr_dict);
+			}	
+			lostbunch->getParticleAttributes("ParticleIdNumber")->attValue(lost_part_ind, 0) = bunch->getParticleAttributes("ParticleIdNumber")->attValue(ip,0);
+		}
+		
+		if (bunch->hasParticleAttributes("ParticleInitialCoordinates") > 0) {
+			if (lostbunch->hasParticleAttributes("ParticleInitialCoordinates") <= 0) {
+				std::map<std::string,double> part_attr_dict;
+				lostbunch->addParticleAttributes("ParticleInitialCoordinates",part_attr_dict);
+			}
+			ParticleInitialCoordinates* partAttr = (ParticleInitialCoordinates*) bunch->getParticleAttributes("ParticleInitialCoordinates");
+			ParticleInitialCoordinates* partAttr_lost = (ParticleInitialCoordinates*) lostbunch->getParticleAttributes("ParticleInitialCoordinates");
+			for(int j=0; j < 6; ++j){
+				partAttr_lost->attValue(lost_part_ind,j) = partAttr->attValue(ip,j);
+			}		
+		}
+	
+		if (bunch->hasParticleAttributes("TurnNumber") > 0) {
+			if (lostbunch->hasParticleAttributes("TurnNumber") <= 0) {
+				std::map<std::string,double> part_attr_dict;
+				lostbunch->addParticleAttributes("TurnNumber",part_attr_dict);
+			}
+			std::string attr_name_str("TurnNumber");
+			double turn = 1.0*bunch->getBunchAttributeInt(attr_name_str);
+			lostbunch->getParticleAttributes("TurnNumber")->attValue(lostbunch->getSize() - 1, 0) = turn;
+		}
+		
 	}
-	if (lostbunch->hasParticleAttributes("ParticleIdNumber") > 0) {
-		lostbunch->getParticleAttributes("ParticleIdNumber")->attValue(lostbunch->getSize() - 1, 0) = bunch->getParticleAttributes("ParticleIdNumber")->attValue(ip,0);
-	}
+	
 	bunch->deleteParticleFast(ip);
 	nLost++;
 	coll_flag = 0;
