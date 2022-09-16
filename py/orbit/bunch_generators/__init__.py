@@ -19,6 +19,7 @@ from distribution_generators import TwissContainer
 from distribution_generators import TwissAnalysis
 from distribution_generators import GaussDist1D
 from distribution_generators import GaussDist2D
+from distribution_generators import GaussDist3D
 from distribution_generators import KVDist1D
 from distribution_generators import KVDist2D
 from distribution_generators import KVDist3D
