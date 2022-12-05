@@ -237,19 +237,6 @@ class AccLattice(NamedObject, TypedObject):
         AccLattice() constructor by the sub-class type constructor
         """
         return self._getSubLattice( AccLattice(),index_start,index_stop)
-    
-    def split(self, max_node_length):
-        """Split nodes into parts so no part is longer than max_node_length."""
-        for node in self.getNodes():
-            node_length = node.getLength()
-            if node_length > max_node_length:
-                node.setnParts(1 + int(node_length / max_node_length))
-        
-    def set_fringe(self, switch):
-        """Turn on(off) fringe field calculation for all nodes."""
-        for node in self.getNodes():
-            node.setUsageFringeFieldIN(switch)
-            node.setUsageFringeFieldOUT(switch)
 
     def trackActions(self, actionsContainer, paramsDict = {}, index_start = -1, index_stop = -1):
         """
