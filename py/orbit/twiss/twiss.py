@@ -1,14 +1,32 @@
+""""""
 import numpy as np
 import numpy.linalg as la
 
-from orbit.utils.general import rotation_matrix
+
+def rotation_matrix(angle):
+    """2x2 clockwise rotation matrix."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, s], [-s, c]])
 
 
-def phase_adv_matrix(mu1, mu2):
-    """4x4 matrix to rotate x-x' by mu1 and y-y' by mu2, both clockwise."""
-    R = np.zeros((4, 4))
-    R[:2, :2] = rotation_matrix(mu1)
-    R[2:, 2:] = rotation_matrix(mu2)
+def rotation_matrix_4D(angle):
+    """4x4 matrix to rotate [x, x', y, y'] clockwise in the x-y plane."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, 0, s, 0], [0, c, 0, s], [-s, 0, c, 0], [0, -s, 0, c]])
+
+
+def phase_adv_matrix_2x2(phase_advance):
+    """Return u-u' phase advance matrix."""
+    return rotation_matrix(phase_advance)
+
+
+def phase_adv_matrix(*phase_advances):
+    """Advance phase in each 2D phase plane (x-x', y-y', etc.)."""
+    n = len(phase_advances)
+    R = np.zeros((2 * n, 2 * n))
+    for i, phase_advance in enumerate(phase_advances):
+        j = 2 * i
+        R[j:j+2, j:j+2] = rotation_matrix(phase_advance)
     return R
 
 

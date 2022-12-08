@@ -18,25 +18,113 @@ from tqdm import tqdm
 from bunch import Bunch
 from orbit.twiss import twiss
 from orbit.twiss import bogacz_lebedev as bl
-from orbit.utils import helper_funcs as hf
-from orbit.utils.consts import mass_proton
-from orbit.utils.consts import pi
-from orbit.utils.general import tprint
+from orbit.utils import consts
 
 
 # Define bounds on 4D Twiss parameters. 
-pad = 1e-5
-alpha_min, alpha_max = -np.inf, np.inf
-beta_min, beta_max = pad, np.inf
-nu_min, nu_max = pad, pi - pad
-u_min, u_max = pad, 1 - pad
+alpha_min = -np.inf
+alpha_max = +np.inf
+pad = 1.0e-5
+beta_min = pad
+beta_max = +np.inf
+nu_min = pad
+nu_max = np.pi - pad
+u_min = pad
+u_max = 1.0 - pad
 TWISS4D_LB = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
 TWISS4D_UB = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
+
+    
+def initialize_bunch(mass=None, kin_energy=None):
+    """Create and initialize a Bunch.
+    
+    Parameters
+    ----------
+    mass, energy : float
+        Mass [GeV/c^2] and kinetic energy [GeV] per bunch particle.
+    
+    Returns
+    -------
+    bunch : Bunch
+        A Bunch object with the given mass and kinetic energy.
+    params_dict : dict
+        Dictionary with reference to Bunch.
+    """
+    bunch = Bunch()
+    bunch.mass(mass)
+    bunch.getSyncParticle().kinEnergy(kin_energy)
+    params_dict = {'bunch': bunch}
+    return bunch, params_dict
+
+
+def transfer_matrix(lattice, mass, energy):
+    """Return linear 6x6 transfer matrix from periodic lattice as ndarray.
+    
+    Parameters
+    ----------
+    lattice : TEAPOT_Lattice
+        A periodic lattice to track with.
+    mass, energy : float
+        Particle mass [GeV/c^2] and kinetic energy [GeV].
+    
+    Returns
+    -------
+    M : ndarray, shape (6, 6)
+        Transverse transfer matrix.
+    """
+    bunch, params_dict = initialize_bunch(mass, energy)
+    matrix_lattice = TEAPOT_MATRIX_Lattice(lattice, bunch)
+    M = np.zeros((6, 6))
+    for i in range(6):
+        for j in range(6):
+            M[i, j] = matrix_lattice.oneTurnMatrix.get(i, j)
+    return M
 
 
 def moment_vector(Sigma):
     """Return array of 10 unique elements of covariance matrix."""
     return Sigma[np.triu_indices(4)]
+
+
+def get_perveance(mass, kin_energy, line_density):
+    """"Compute dimensionless beam perveance.
+    
+    Parameters
+    ----------
+    mass : float
+        Mass per particle [GeV/c^2].
+    kin_energy : float
+        Kinetic energy per particle [GeV].
+    line_density : float
+        Number density in longitudinal direction [m^-1].
+    
+    Returns
+    -------
+    float
+        Dimensionless space charge perveance
+    """
+    gamma = 1 + (kin_energy / mass) # Lorentz factor
+    beta = np.sqrt(1 - (1 / gamma)**2) # velocity/speed_of_light
+    return (2 * consts.classical_proton_radius * line_density) / (beta**2 * gamma**3)
+
+
+def toggle_spacecharge_nodes(sc_nodes, status='off'):
+    """Turn on(off) a set of space charge nodes.
+    
+    Parameters
+    ----------
+    sc_nodes : list
+        List of space charge nodes. They should be subclasses of
+        `SC_Base_AccNode`.
+    status : {'on', 'off'}
+        Whether to turn the nodes on or off.
+    Returns
+    -------
+    None
+    """
+    switch = {'on':True, 'off':False}[status]
+    for sc_node in sc_nodes:
+        sc_node.switcher = switch
 
 
 class DanilovEnvelope:
@@ -68,7 +156,7 @@ class DanilovEnvelope:
     perveance : float
         Dimensionless beam perveance.
     """
-    def __init__(self, eps_l=1., mode=1, eps_x_frac=0.5, mass=mass_proton,
+    def __init__(self, eps_l=1., mode=1, eps_x_frac=0.5, mass=consts.mass_proton,
                  kin_energy=1.0, length=1.0, intensity=0.0, params=None):
         self.eps_l = eps_l
         self.mode = mode
@@ -99,8 +187,7 @@ class DanilovEnvelope:
         """Set beam intensity and re-calculate perveance."""
         self.intensity = intensity
         self.line_density = intensity / self.length
-        self.perveance = hf.get_perveance(self.mass, self.kin_energy,
-                                          self.line_density)
+        self.perveance = get_perveance(self.mass, self.kin_energy, self.line_density)
                                           
     def set_length(self, length):
         """Set beam length and re-calculate perveance."""
@@ -215,7 +302,7 @@ class DanilovEnvelope:
         """Return area of ellipse in x1-x2 plane."""
         a, b = self.get_params_for_dim(x1)
         e, f = self.get_params_for_dim(x2)
-        return pi * abs(a*f - b*e)
+        return np.pi * abs(a*f - b*e)
         
     def phases(self):
         """Return horizontal and vertical phases of a particle whose 
@@ -225,9 +312,9 @@ class DanilovEnvelope:
         a, b, ap, bp, e, f, ep, fp = self.normed_params_2D()
         mux, muy = -np.arctan2(ap, a), -np.arctan2(ep, e)
         if mux < 0:
-            mux += 2 * pi
+            mux += 2 * np.pi
         if muy < 0:
-            muy += 2 * pi
+            muy += 2 * np.pi
         return mux, muy
         
     def phase_diff(self):
@@ -238,7 +325,7 @@ class DanilovEnvelope:
         """
         mux, muy = self.phases()
         nu = abs(muy - mux)
-        return nu if nu < pi else 2*pi - nu
+        return nu if nu < np.pi else 2*np.pi - nu
     
     def cov(self):
         """Return transverse covariance matrix."""
@@ -373,7 +460,7 @@ class DanilovEnvelope:
             The coordinate array for the distribution.
         """
         nparts = int(nparts)
-        psis = np.linspace(0, 2*pi, nparts)
+        psis = np.linspace(0, 2*np.pi, nparts)
         X = np.array([self.part_coords(psi) for psi in psis])
         if density == 'uniform':
             radii = np.sqrt(np.random.random(nparts))
@@ -411,7 +498,7 @@ class DanilovEnvelope:
         params_dict : dict
             The dictionary of parameters for the bunch.
         """
-        bunch, params_dict = hf.initialize_bunch(self.mass, self.kin_energy)
+        bunch, params_dict = initialize_bunch(self.mass, self.kin_energy)
         if not no_env:
             a, b, ap, bp, e, f, ep, fp = self.params
             bunch.addParticle(a, ap, e, ep, 0., 0.)
@@ -450,8 +537,8 @@ class DanilovEnvelope:
         mux0, muy0 = env.phases()
         env.track(lattice)
         mux1, muy1 = env.phases()
-        tune_x = ((mux1 - mux0) / (2*pi)) % 1
-        tune_y = ((muy1 - muy0) / (2*pi)) % 1
+        tune_x = ((mux1 - mux0) / (2*np.pi)) % 1
+        tune_y = ((muy1 - muy0) / (2*np.pi)) % 1
         return np.array([tune_x, tune_y])
             
     def transfer_matrix(self, lattice):
@@ -477,7 +564,8 @@ class DanilovEnvelope:
         # If space charge is zero, we can just use the TEAPOT_MATRIX_Lattice
         # class to calculate the transfer matrix.
         if self.perveance == 0:
-            return hf.transfer_matrix(lattice, self.mass, self.kin_energy)
+            M = transfer_matrix(lattice, self.mass, self.kin_energy)
+            return M[:4, :4]
             
         # The envelope parameters will change if the beam is not matched to 
         # the lattice, so make a copy of the intial state.
@@ -536,7 +624,7 @@ class DanilovEnvelope:
             The matched envelope parameters.
         """
         if solver_nodes is not None:
-            hf.toggle_spacecharge_nodes(solver_nodes, 'off')
+            toggle_spacecharge_nodes(solver_nodes, 'off')
             
         # Get linear transfer matrix
         M = self.transfer_matrix(lattice)
@@ -570,7 +658,7 @@ class DanilovEnvelope:
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         
         if solver_nodes is not None:
-            hf.toggle_spacecharge_nodes(solver_nodes, 'on')
+            toggle_spacecharge_nodes(solver_nodes, 'on')
         return self.params
         
     def match(self, lattice, solver_nodes, method='auto', tol=1e-4, **kws):
@@ -600,7 +688,7 @@ class DanilovEnvelope:
             
         def initialize():
             self.set_twiss4D_param('u', 0.5)
-            self.set_twiss4D_param('nu', pi/2)
+            self.set_twiss4D_param('nu', 0.5 * np.pi)
             self.match_bare(lattice, '2D', solver_nodes)
             
         initialize()
@@ -777,6 +865,11 @@ class MatchingResult:
         self.p, self.cost, self.iters, self.time = p, cost, iters, runtime
         self.message = message
         self.history = np.array(history)
+
+        
+def tprint(string, indent=4):
+    """Print with indent."""    
+    print(indent * ' ' + str(string))
 
         
 def print_header():
