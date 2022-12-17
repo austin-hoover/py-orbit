@@ -6,33 +6,39 @@ References
 [2] https://doi.org/10.1103/PhysRevAccelBeams.24.044201
 """
 from __future__ import print_function
-import time
 import copy
+import time
 
 import numpy as np
 import numpy.linalg as la
 import scipy.optimize as opt
 from tqdm import trange
-from tqdm import tqdm
 
 from bunch import Bunch
-from orbit.twiss import bogacz_lebedev as bl
+from orbit.twiss import lebedev_bogacz as LB
+from orbit.twiss import courant_snyder as CS
 from orbit.twiss import twiss
 from orbit.utils import consts
 
 
 # Define bounds on 4D Twiss parameters.
-alpha_min = -np.inf
-alpha_max = +np.inf
-pad = 1.0e-5
-beta_min = pad
-beta_max = +np.inf
-nu_min = pad
-nu_max = np.pi - pad
-u_min = pad
-u_max = 1.0 - pad
-TWISS4D_LB = (alpha_min, alpha_min, beta_min, beta_min, u_min, nu_min)
-TWISS4D_UB = (alpha_max, alpha_max, beta_max, beta_max, u_max, nu_max)
+ALPHA_MIN = -np.inf
+ALPHA_MAX = +np.inf
+PAD = 1.0e-5
+BETA_MIN = PAD
+BETA_MAX = +np.inf
+U_MIN = PAD
+U_MAX = 1.0 - PAD
+NU_MIN = PAD
+NU_MAX = np.pi - PAD
+TWISS4D_LB = (ALPHA_MIN, BETA_MIN, ALPHA_MIN, BETA_MIN, U_MIN, NU_MIN)
+TWISS4D_UB = (ALPHA_MAX, BETA_MAX, ALPHA_MAX, BETA_MAX, U_MAX, NU_MAX)
+
+
+def rotation_matrix_4D(angle):
+    """4 x 4 matrix to rotate [x, x', y, y'] clockwise in the x-y plane."""
+    c, s = np.cos(angle), np.sin(angle)
+    return np.array([[c, 0, s, 0], [0, c, 0, s], [-s, 0, c, 0], [0, -s, 0, c]])
 
 
 def initialize_bunch(mass=None, kin_energy=None):
@@ -108,25 +114,6 @@ def get_perveance(mass, kin_energy, line_density):
     return (2 * consts.classical_proton_radius * line_density) / (
         beta**2 * gamma**3
     )
-
-
-def toggle_spacecharge_nodes(sc_nodes, status="off"):
-    """Turn on(off) a set of space charge nodes.
-
-    Parameters
-    ----------
-    sc_nodes : list
-        List of space charge nodes. They should be subclasses of
-        `SC_Base_AccNode`.
-    status : {'on', 'off'}
-        Whether to turn the nodes on or off.
-    Returns
-    -------
-    None
-    """
-    switch = {"on": True, "off": False}[status]
-    for sc_node in sc_nodes:
-        sc_node.switcher = switch
 
 
 class DanilovEnvelope:
@@ -229,7 +216,7 @@ class DanilovEnvelope:
 
     def get_norm_mat_2D(self, inv=False):
         """Return normalization matrix V (x-x' and y-y' become circles)."""
-        V = twiss.V_matrix_4x4_uncoupled(*self.twiss2D())
+        V = CS.norm_matrix(*self.twiss2D())
         return la.inv(V) if inv else V
 
     def norm2D(self, scale=False):
@@ -288,7 +275,7 @@ class DanilovEnvelope:
 
     def rotate(self, phi):
         """Apply clockwise rotation by phi degrees in x-y space."""
-        self.transform(twiss.rotation_matrix_4D(np.radians(phi)))
+        self.transform(rotation_matrix_4D(np.radians(phi)))
 
     def tilt_angle(self, x1="x", x2="y"):
         """Return ccw angle of ellipse in x1-x2 plane."""
@@ -323,10 +310,10 @@ class DanilovEnvelope:
         The value returned is between zero and 2pi."""
         a, b, ap, bp, e, f, ep, fp = self.normed_params_2D()
         mux, muy = -np.arctan2(ap, a), -np.arctan2(ep, e)
-        if mux < 0:
-            mux += 2 * np.pi
-        if muy < 0:
-            muy += 2 * np.pi
+        if mux < 0.0:
+            mux += 2.0 * np.pi
+        if muy < 0.0:
+            muy += 2.0 * np.pi
         return mux, muy
 
     def phase_diff(self):
@@ -340,29 +327,32 @@ class DanilovEnvelope:
         return nu if nu < np.pi else 2 * np.pi - nu
 
     def cov(self):
-        """Return transverse covariance matrix."""
+        """Return 4 x 4 transverse covariance matrix."""
         P = self.matrix()
         return 0.25 * np.matmul(P, P.T)
 
     def apparent_emittances(self, mm_mrad=False):
-        """Return rms apparent emittances (area in x-x' and y-y')."""
+        """Return rms apparent emittances eps_x, eps_y."""
         Sigma = self.cov()
         ex = np.sqrt(la.det(Sigma[:2, :2]))
         ey = np.sqrt(la.det(Sigma[2:, 2:]))
         emittances = np.array([ex, ey])
         if mm_mrad:
-            emittances *= 1e6
+            emittances *= 1.0e6
         return emittances
 
     def intrinsic_emittances(self, mm_mrad=False):
-        """Return rms intrinsic emittances (eps_1 * eps_2 = eps_4D)"""
+        """Return rms intrinsic emittances eps1, eps2."""
         if self.mode == 1:
             return np.array([self.eps_l, 0.0])
         elif self.mode == 2:
             return np.array([0.0, self.eps_l])
 
     def twiss2D(self):
-        """Return 2D Twiss parameters."""
+        """Return 2D Twiss parameters.
+        
+        Order is [alpha_x, beta_x, alpha_y, beta_y].
+        """
         Sigma = self.cov()
         eps_x = np.sqrt(la.det(Sigma[:2, :2]))
         eps_y = np.sqrt(la.det(Sigma[2:, 2:]))
@@ -370,10 +360,13 @@ class DanilovEnvelope:
         beta_y = Sigma[2, 2] / eps_y
         alpha_x = -Sigma[0, 1] / eps_x
         alpha_y = -Sigma[2, 3] / eps_y
-        return np.array([alpha_x, alpha_y, beta_x, beta_y])
+        return np.array([alpha_x, beta_x, alpha_y, beta_y])
 
     def twiss4D(self):
-        """Return 4D Twiss parameters as defined by Lebedev/Bogacz."""
+        """Return 4D Twiss parameters as defined by Lebedev/Bogacz.
+        
+        Order is [alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu].
+        """
         Sigma = self.cov()
         eps_x = np.sqrt(la.det(Sigma[:2, :2]))
         eps_y = np.sqrt(la.det(Sigma[2:, 2:]))
@@ -386,11 +379,11 @@ class DanilovEnvelope:
         elif self.mode == 2:
             u = eps_x / self.eps_l
         nu = self.phase_diff()
-        return np.array([alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu])
+        return np.array([alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu])
 
-    def set_twiss2D(self, alpha_x, alpha_y, beta_x, beta_y, eps_x_frac=None):
+    def set_twiss2D(self, alpha_x=0.0, beta_x=1.0, alpha_y=0.0, beta_y=1.0, eps_x_frac=None):
         """Set the 2D Twiss parameters of the envelope."""
-        V = twiss.V_matrix_4x4_uncoupled(alpha_x, alpha_y, beta_x, beta_y)
+        V = CS.norm_matrix(alpha_x, beta_x, alpha_y, beta_y)
         if not eps_x_frac:
             eps_x_frac = self.eps_x_frac
         eps_x = eps_x_frac * self.eps_l
@@ -405,28 +398,28 @@ class DanilovEnvelope:
         `twiss_params` is an array containing the 4D Twiss params for a single
         mode: [alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu], where
         * alpha_lx : Horizontal alpha function -<xx'>/epsl.
-        * alpha_ly : Vertical alpha_function -<yy'>/epsl.
         * beta_lx : Horizontal beta function <xx>/epsl.
+        * alpha_ly : Vertical alpha_function -<yy'>/epsl.
         * beta_ly : Vertical beta function -yy>/epsl.
         * u : Coupling parameter in range [0, 1]. This is equal to eps_y/epsl
               in mode 1 or eps_x/epsl in mode 2.
         * nu : The x-y phase difference in range [0, pi].
         """
-        alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu = twiss_params
-        V = bl.Vmat(alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu, self.mode)
+        alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu = twiss_params
+        V = LB.norm_mat_from_twiss_one_mode(alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu, mode=self.mode)
         self.norm_transform(V)
 
     def set_twiss4D_param(self, param_name, value):
         """Change single Twiss parameter without changing the others.
 
         param_name : str
-            Name of parameter to change. Options are {'alpha_lx', 'alpha_lx',
-            'alpha_lx', 'alpha_lx', 'u', 'nu'}
+            Name of parameter to change. Options are {'alpha_lx', 'beta_lx',
+            'alpha_ly', 'beta_ly', 'u', 'nu'}
         value : float
             New value for the parameter.
         """
         twiss_params = self.twiss4D()
-        param_names = ["alpha_lx", "alpha_ly", "beta_lx", "beta_ly", "u", "nu"]
+        param_names = ["alpha_lx", "beta_lx", "alpha_ly", "beta_ly", "u", "nu"]
         for i in range(len(twiss_params)):
             if param_name == param_names[i]:
                 twiss_params[i] = value
@@ -436,13 +429,13 @@ class DanilovEnvelope:
 
     def set_cov(self, Sigma, verbose=0):
         """Set the beam covariance matrix `Sigma`."""
-
+        
         def residuals(params, Sigma):
             self.params = params
-            return 1e6 * moment_vector(Sigma - self.cov())
+            return 1.0e6 * moment_vector(Sigma - self.cov())
 
         result = opt.least_squares(
-            residuals, self.params, args=(Sigma,), xtol=1e-12, verbose=verbose
+            residuals, self.params, args=(Sigma,), xtol=1.0e-12, verbose=verbose
         )
         return result.x
 
@@ -586,7 +579,7 @@ class DanilovEnvelope:
         # the lattice, so make a copy of the intial state.
         env = self.copy()
 
-        step_arr_init = np.full(6, 1e-6)
+        step_arr_init = np.full(6, 1.0e-6)
         step_arr = np.copy(step_arr_init)
         step_reduce = 20.0
         bunch, params_dict = env.to_bunch()
@@ -645,27 +638,31 @@ class DanilovEnvelope:
             The matched envelope parameters.
         """
         if solver_nodes is not None:
-            toggle_spacecharge_nodes(solver_nodes, "off")
+            for node in solver_nodes:
+                node.switcher = False
 
         # Get linear transfer matrix
         M = self.transfer_matrix(lattice)
-        if not twiss.is_stable(M):
+        tmat = twiss.TransferMatrix(M)
+        if not tmat.stable:
             print("WARNING: transfer matrix is not stable.")
-        # Match to the lattice
+            
+        # Match to the bare lattice.
         if method == "auto":
-            lattice_is_coupled = twiss.unequal_eigtunes(M)
-            method = "4D" if lattice_is_coupled else "2D"
+            method = "4D" if tmat.coupled else "2D"
         if method == "2D":
-            lattice_params = twiss.params_from_transfer_matrix(M)
+            tmat.set_parameterization('CS')
+            tmat.analyze()
             self.set_twiss2D(
-                lattice_params["alpha_x"],
-                lattice_params["alpha_y"],
-                lattice_params["beta_x"],
-                lattice_params["beta_y"],
+                alpha_x=tmat.params["alpha_x"],
+                beta_x=tmat.params["beta_x"],
+                alpha_y=tmat.params["alpha_y"],
+                beta_y=tmat.params["beta_y"],
             )
         elif method == "4D":
-            eigvals, eigvecs = la.eig(M)
-            V = bl.construct_V(eigvecs)
+            tmat.set_parameterization('LB')
+            tmat.analyze()
+            V = tmat.params['V']
             self.norm_transform(V)
 
         # If rms beam size or divergence are zero in either plane, make them
@@ -673,7 +670,7 @@ class DanilovEnvelope:
         # has unequal x/y tunes. This was just so that I could still run my
         # analysis scripts without getting infinite beta functions.
         a, b, ap, bp, e, f, ep, fp = self.params
-        pad = 1e-8
+        pad = 1.0e-8
         if np.all(np.abs(self.params[:4]) < pad):
             a = bp = pad
         if np.all(np.abs(self.params[4:]) < pad):
@@ -681,10 +678,12 @@ class DanilovEnvelope:
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
 
         if solver_nodes is not None:
-            toggle_spacecharge_nodes(solver_nodes, "on")
+            for node in solver_nodes:
+                node.switcher = True
+                
         return self.params
 
-    def match(self, lattice, solver_nodes, method="auto", tol=1e-4, **kws):
+    def match(self, lattice, solver_nodes, method="auto", tol=1.0e-4, **kws):
         """Match the envelope to the lattice.
 
         lattice : TEAPOT_Lattice
@@ -731,7 +730,7 @@ class DanilovEnvelope:
         else:
             raise ValueError("Invalid method! Options: {'lsq', 'replace_avg', 'auto'}")
 
-    def _residuals(self, lattice, factor=1e6):
+    def _residuals(self, lattice, factor=1.0e6):
         """Return initial minus final beam moments after tracking.
         The method does not change the envelope.
         """
@@ -776,9 +775,9 @@ class DanilovEnvelope:
         lattice,
         nturns_avg=15,
         max_iters=100,
-        tol=1e-6,
-        ftol=1e-8,
-        xtol=1e-8,
+        tol=1.0e-6,
+        ftol=1.0e-8,
+        xtol=1.0e-8,
         verbose=0,
     ):
         """Compute the matched envelope using custom optimizer.
@@ -877,20 +876,26 @@ class DanilovEnvelope:
         alpha_x, alpha_y, beta_x, beta_y = self.twiss2D()
         eps_x, eps_y = self.apparent_emittances()
         print("2D Twiss parameters:")
-        print("alpha_x, alpha_y = {:.3f}, {:.3f} [rad]".format(alpha_x, alpha_y))
-        print("beta_x, beta_y = {:.3f}, {:.3f} [m]".format(beta_x, beta_y))
-        print("eps_x, eps_y = {:.3e}, {:.3e} [m rad]".format(eps_x, eps_y))
+        print("alpha_x = {:.3f}".format(alpha_x))
+        print("alpha_y = {:.3f}".format(alpha_y))
+        print("beta_x = {:.3f} [m/rad]".format(beta_x))
+        print("beta_y = {:.3f} [m/rad]".format(beta_y))
+        print("eps_x = {:.3f} [m*rad]".format(eps_x))
+        print("eps_y = {:.3f} [m*rad]".format(eps_y))
 
     def print_twiss4D(self):
-        alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu = self.twiss4D()
+        alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu = self.twiss4D()
         eps_1, eps_2 = self.intrinsic_emittances()
         print("4D Twiss parameters:")
         print("mode (l) = {}".format(self.mode))
-        print("alpha_lx, alpha_ly = {:.3f}, {:.3f} [rad]".format(alpha_lx, alpha_ly))
-        print("beta_lx, beta_ly = {:.3f}, {:.3f} [m]".format(beta_lx, beta_ly))
+        print("alpha_lx = {:.3f}".format(alpha_lx))
+        print("alpha_ly = {:.3f}".format(alpha_ly))
+        print("beta_lx = {:.3f} [m/rad]".format(beta_lx))
+        print("beta_ly = {:.3f} [m/rad]".format(beta_ly))
         print("u = {:.3f}".format(u))
         print("nu = {:.3f} [deg]".format(np.degrees(nu)))
-        print("eps_1, eps_2 = {:.3e}, {:.3e} [m rad]".format(eps_1, eps_2))
+        print("eps_1 = {:.3e} [m*rad]".format(eps_1))
+        print("eps_2 = {:.3e} [m*rad]".format(eps_2))
 
 
 class MatchingResult:

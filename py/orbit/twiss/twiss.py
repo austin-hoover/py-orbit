@@ -1,140 +1,161 @@
-""""""
+"""Analysis of linear, periodic transfer maps."""
 import numpy as np
-import numpy.linalg as la
+from scipy.linalg import block_diag
+
+import orbit.twiss.courant_snyder as CS
+import orbit.twiss.edwards_teng as ET
+import orbit.twiss.lebedev_bogacz as LB
+import orbit.twiss.qin_davidson as QD
 
 
-def rotation_matrix(angle):
-    """2x2 clockwise rotation matrix."""
-    c, s = np.cos(angle), np.sin(angle)
-    return np.array([[c, s], [-s, c]])
+def unit_symplectic_matrix(n=2):
+    """Construct 2n x 2n unit symplectic matrix.
+
+    Each 2 x 2 block is [[0, 1], [-1, 0]]. This assumes our phase space vector
+    is ordered as [x, x', y, y', ...].
+    """
+    if n % 2 != 0:
+        raise ValueError("n must be an even integer")
+    U = np.zeros((n, n))
+    for i in range(0, n, 2):
+        U[i : i + 2, i : i + 2] = [[0.0, 1.0], [-1.0, 0.0]]
+    return U
 
 
-def rotation_matrix_4D(angle):
-    """4x4 matrix to rotate [x, x', y, y'] clockwise in the x-y plane."""
-    c, s = np.cos(angle), np.sin(angle)
-    return np.array([[c, 0, s, 0], [0, c, 0, s], [-s, 0, c, 0], [0, -s, 0, c]])
+def is_symplectic(M, tol=1.0e-6):
+    """Return True if M is symplectic.
+    
+    M is symplectic iff M^T * U * M = U, where U is the unit symplectic matrix.
+    This method checks whether the sum of squares of U - M^T * U * M is less 
+    than `tol`.
+    """
+    if M.shape[0] != M.shape[1]:
+        return False
+    U = unit_symplectic_matrix(M.shape[0])
+    residuals = U - np.linalg.multi_dot([M.T, U, M])
+    return np.sum(residuals**2) < tol
 
 
-def phase_adv_matrix_2x2(phase_advance):
-    """Return u-u' phase advance matrix."""
-    return rotation_matrix(phase_advance)
+def is_coupled(M):
+    """Return True if there are coupled elements in M."""
+    if M.shape[0] < 4:
+        return False
+    mask = np.zeros(M.shape)
+    for i in range(0, M.shape[0], 2):
+        mask[i : i + 2, i : i + 2] = 1.0
+    return np.any(np.ma.masked_array(M, mask=mask))
+
+
+def is_stable(M, tol=1.0e-8):
+    """Return True if M produces bounded motion."""
+    return all_eigvals_on_unit_circle(np.linalg.eigvals(M), tol=tol)
+
+    
+def all_eigvals_on_unit_circle(eigvals, tol=1.0e-8):
+    """Return True if all eigenvalues are on the unit circle in the complex plane.
+    
+    eigvals : ndarray, shape (n,)
+        Eigenvalues of a symplectic transfer matrix.
+    """
+    for eigval in eigvals:
+        if abs(np.linalg.norm(eigval) - 1.0) > tol:
+            return False
+    return True
+
+
+def eigtunes_from_eigvals(eigvals):
+    """Return eigentune from eigenvalue of symplectic matrix.
+    
+    They are related as: eigval = Re[exp(-i * (2 * pi * tune))], where i is the imaginary unit.
+    
+    eigvals : ndarray, shape (n,)
+        Eigenvalues of a symplectic transfer matrix.
+    """
+    return np.arccos(eigvals.real)[[0, 2]] / (2.0 * np.pi)
 
 
 def phase_adv_matrix(*phase_advances):
-    """Advance phase in each 2D phase plane (x-x', y-y', etc.)."""
-    n = len(phase_advances)
-    R = np.zeros((2 * n, 2 * n))
-    for i, phase_advance in enumerate(phase_advances):
-        j = 2 * i
-        R[j:j+2, j:j+2] = rotation_matrix(phase_advance)
-    return R
-
-
-def V_matrix_2x2(alpha, beta):
-    """2x2 normalization matrix for x-x' or y-y'."""
-    return np.array([[beta, 0], [-alpha, 1]]) / np.sqrt(beta)
-    
-    
-def V_matrix_4x4_uncoupled(alpha_x, alpha_y, beta_x, beta_y):
-    """4x4 normalization matrix for x-x' and y-y'."""
-    V = np.zeros((4, 4))
-    V[:2, :2] = V_matrix_2x2(alpha_x, beta_x)
-    V[2:, 2:] = V_matrix_2x2(alpha_y, beta_y)
-    return V
-
-
-def params_from_transfer_matrix(M):
-    """Return dictionary of lattice parameters from a transfer matrix.
-    
-    Method is taken from `py/orbit/matrix_lattice/MATRIX_Lattice.py`.
+    """2n x 2n phase advance matrix (clockwise rotation in each phase plane).
     
     Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
+    ---------
+    mu1, mu2, ..., mun : float
+        The phase advance in each plane.
+    
+    Returns
+    -------
+    ndarray, shape (2n, 2n)
+        Matrix that rotates x-x', y-y', z-z', etc.
+    """
+    def rotation_matrix(angle):
+        c, s = np.cos(angle), np.sin(angle)
+        return np.array([[c, s], [-s, c]])
+    
+    mats = [rotation_matrix(phase_advance) for phase_advance in phase_advances]
+    return block_diag(*mats)
+
+
+def construct_transfer_matrix(norm_matrix, phase_adv_matrix):
+    """Construct transfer matrix from normalization and phase advance matrix."""
+    V = norm_matrix
+    P = phase_adv_matrix
+    Vinv = np.linalg.inv(V)
+    return np.linalg.multi_dot([V, P, Vinv])
+
+
+class TransferMatrix:
+    """Symplectic transfer matrix analysis.
+    
+    Attributes
+    -----------
+    M : ndarray, shape (2n, 2n)
+        The periodic transfer matrix.
+    eigvals : ndarray, shape (2n,)
+        The eigenvalues of the transfer matrix.
+    eigvecs : ndarray, shape (2n, 2n)
+        The eigenvectors of the transfer matrix. (Arranged as columns.)
+    eigtunes : ndarray, shape (n,)
+        The tunes {nu_1, nu_2, ... nun}. The tune nu_l is related to the 
+        eigenvalue lambda_l as: lambda_l = Re[exp(-i * (2 * pi * nu_l))],
+        where i is the imaginary unit.
+    stable : bool
+        Whether the transfer matrix is stable --- whether all eigenvalues
+        lie on the unit circle in the complex plane.
+    coupled : bool
+        Whether there are any nonzero off-block-diagonal (cross-plane) elements.
+    parameterization : {'CS', 'LB', 'ET', 'QD'}
+        * 'CS': Courant-Snyder
+        * 'LB': Lebedev-Bogacz 
+        * 'ET': 'Edwards-Teng 
+        * 'QD': Qin-Davidson
+    parameters : dict
+        Computed lattice parameters. Each parameterization above will return
+        different parameters; see each module/paper for details.
+    """
+    def __init__(self, M, parameterization='CS'):
+        self.M = M
+        self.eigvecs = None
+        self.eigvals = None
+        self.eigtunes = None
+        self.stable = False
+        self.parameterization = parameterization            
+        self.params = dict()
+        self.analyze_eig()
+        self.analyze()
         
-    Returns
-    -------
-    lattice_params : dict
-        Dictionary with the following keys: 'frac_tune_x', 'frac_tune_y',
-        'alpha_x', 'alpha_y', 'beta_x', 'beta_y', 'gamma_x', 'gamma_y'.
-    """
-    keys = ['frac_tune_x', 'frac_tune_y', 
-            'alpha_x', 'alpha_y', 
-            'beta_x', 'beta_y', 
-            'gamma_x', 'gamma_y']
-    lattice_params = {key: None for key in keys}
-    
-    cos_phi_x = (M[0, 0] + M[1, 1]) / 2
-    cos_phi_y = (M[2, 2] + M[3, 3]) / 2
-    if abs(cos_phi_x) >= 1 or abs(cos_phi_y) >= 1 :
-        return lattice_params
-    sign_x = sign_y = +1
-    if abs(M[0, 1]) != 0:
-        sign_x = M[0, 1] / abs(M[0, 1])
-    if abs(M[2, 3]) != 0:
-        sign_y = M[2, 3] / abs(M[2, 3])
-    sin_phi_x = sign_x * np.sqrt(1 - cos_phi_x**2)
-    sin_phi_y = sign_y * np.sqrt(1 - cos_phi_y**2)
-    
-    nux = sign_x * np.arccos(cos_phi_x) / (2 * np.pi)
-    nuy = sign_y * np.arccos(cos_phi_y) / (2 * np.pi)
-    beta_x = M[0, 1] / sin_phi_x
-    beta_y = M[2, 3] / sin_phi_y
-    alpha_x = (M[0, 0] - M[1, 1]) / (2 * sin_phi_x)
-    alpha_y = (M[2, 2] - M[3, 3]) / (2 * sin_phi_y)
-    gamma_x = -M[1, 0] / sin_phi_x
-    gamma_y = -M[3, 2] / sin_phi_y
-    
-    lattice_params['frac_tune_x'] = nux
-    lattice_params['frac_tune_y'] = nuy
-    lattice_params['beta_x'] = beta_x
-    lattice_params['beta_y'] = beta_y
-    lattice_params['alpha_x'] = alpha_x
-    lattice_params['alpha_y'] = alpha_y
-    lattice_params['gamma_x'] = gamma_x
-    lattice_params['gamma_y'] = gamma_y
-    return lattice_params
-
-
-def is_stable(M, tol=1e-5):
-    """Return True if transfer matrix is stable.
-    
-    M : ndarray, shape (n, n)
-        A transfer matrix.
-    tol : float
-        The matrix is stable if all eigenvalue norms are in the range 
-        (1 - tol, 1 + tol).
-    """
-    for eigval in la.eigvals(M):
-        if abs(la.norm(eigval) - 1.0) > tol:
-            return False
-    return True
-    
-    
-def get_eigtunes(M):
-    """Compute transfer matrix eigentunes -- cos(Re[eigenvalue]).
-    
-    Parameters
-    ----------
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-
-    Returns
-    -------
-    ndarray, shape (2,)
-        Eigentunes for the two modes.
-    """
-    return np.arccos(la.eigvals(M).real)[[0, 2]] / (2 * np.pi)
-    
-
-def unequal_eigtunes(M, tol=1e-5):
-    """Return True if the eigentunes of the transfer matrix are the same.
-
-    M : ndarray, shape (4, 4)
-        A transfer matrix.
-    tol : float
-        Tunes are equal if abs(mu1 - mu2) > tol.
-    """
-    mu1, mu2 = get_eigtunes(M)
-    return abs(mu1 - mu2) > tol
+    def set_parameterization(self, parameterization):
+        if parameterization not in ['CS', 'LB']:
+            raise ValueError('Invalid parameterization.')
+        self.parameterization = parameterization
+        
+    def analyze_eig(self):
+        self.eigvals, self.eigvecs = np.linalg.eig(self.M)
+        self.eigtunes = eigtunes_from_eigvals(self.eigvals)
+        self.stable = all_eigvals_on_unit_circle(self.eigvals)
+        self.coupled = is_coupled(self.M)
+        
+    def analyze(self):
+        if self.parameterization == 'CS':
+            self.params = CS.analyze_transfer_matrix(self.M)
+        elif self.parameterization == 'LB':
+            self.params = LB.analyze_transfer_matrix(self.M)
