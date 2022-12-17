@@ -3,9 +3,7 @@ import numpy as np
 from scipy.linalg import block_diag
 
 import orbit.twiss.courant_snyder as CS
-import orbit.twiss.edwards_teng as ET
 import orbit.twiss.lebedev_bogacz as LB
-import orbit.twiss.qin_davidson as QD
 
 
 def unit_symplectic_matrix(n=2):
@@ -104,7 +102,7 @@ def construct_transfer_matrix(norm_matrix, phase_adv_matrix):
     return np.linalg.multi_dot([V, P, Vinv])
 
 
-class TransferMatrix:
+class TransferMatrixAnalysis:
     """Symplectic transfer matrix analysis.
 
     Attributes
@@ -124,43 +122,88 @@ class TransferMatrix:
         lie on the unit circle in the complex plane.
     coupled : bool
         Whether there are any nonzero off-block-diagonal (cross-plane) elements.
-    parameterization : {'CS', 'LB', 'ET', 'QD'}
-        * 'CS': Courant-Snyder
-        * 'LB': Lebedev-Bogacz
-        * 'ET': 'Edwards-Teng
-        * 'QD': Qin-Davidson
     parameters : dict
         Computed lattice parameters. Each parameterization above will return
         different parameters; see each module/paper for details.
     """
-
-    def __init__(self, M, parameterization="CS"):
-        self.M = M
+    def __init__(self, M):
+        self.M = M[:4, :4]
         self.eigvecs = None
         self.eigvals = None
         self.eigtunes = None
         self.stable = False
-        self.parameterization = parameterization
         self.params = dict()
         self.analyze_eig()
-        self.analyze()
-
-    def set_parameterization(self, parameterization):
-        if parameterization not in ["CS", "LB"]:
-            raise ValueError("Invalid parameterization.")
-        self.parameterization = parameterization
 
     def analyze_eig(self):
         self.eigvals, self.eigvecs = np.linalg.eig(self.M)
         self.eigtunes = eigtunes_from_eigvals(self.eigvals)
         self.stable = all_eigvals_on_unit_circle(self.eigvals)
         self.coupled = is_coupled(self.M)
-
+        
     def analyze(self):
-        available_modules = {
-            "CS": CS,
-            "LB": LB,
-        }
-        module = available_modules[self.parameterization]
-        self.params = module.analyze_transfer_matrix(self.M)
-        self.eigvecs_n = module.normalize(self.eigvecs)
+        return
+
+        
+class CourantSnyder(TransferMatrixAnalysis):
+    """Courant-Snyder parameterization of uncoupled (transverse) motion."""
+    def __init__(self, M):
+        TransferMatrixAnalysis.__init__(self, M)
+        self.analyze()
+    
+    def analyze(self):
+        self.eigvecs = CS.normalize(self.eigvecs)
+        self.params.update(**CS.twiss_from_transfer_matrix(self.M))
+        self.params['V'] = CS.norm_matrix_from_twiss(
+            self.params['alpha_x'],
+            self.params['beta_x'],
+            self.params['alpha_y'],
+            self.params['beta_y'],
+        )
+
+        
+class LebedevBogacz(TransferMatrixAnalysis):
+    """Lebedev-Bogacz parameterization of coupled motion.
+
+    Under developement. Some of these methods have not been tested in a while.
+
+    References
+    ----------
+    [1] https://iopscience.iop.org/article/10.1088/1748-0221/5/10/P10010
+    """
+    def __init__(self, M):
+        TransferMatrixAnalysis.__init__(self, M)
+        self.analyze()
+    
+    def norm_matrix_from_eigvecs(self, eigvecs, norm=False):
+        """Construct symplectic normalization matrix.
+
+        eigvecs: ndarray, shape (2n, 2n)
+            Each column is an eigenvector. We assume they are not normalized.
+        norm : bool
+            If False, assume the eigenvectors are already normalized.
+        """
+        if norm:
+            eigvecs = self.normalize(eigvecs.copy())
+        V = np.zeros(eigvecs.shape)
+        for i in range(0, V.shape[1], 2):
+            V[:, i] = eigvecs[:, i].real
+            V[:, i + 1] = (1j * eigvecs[:, i]).real
+        return V
+    
+    def analyze(self):
+        self.eigvecs = LB.normalize(self.eigvecs)
+        self.params['V'] = LB.norm_matrix_from_eigvecs(self.eigvecs)
+        (
+            self.params['alpha_1x'],
+            self.params['beta_1x'],
+            self.params['alpha_1y'],
+            self.params['beta_1y'],
+            self.params['alpha_2x'],
+            self.params['beta_2x'],
+            self.params['alpha_2y'],
+            self.params['beta_2y'],
+            self.params['u'],
+            self.params['nu1'],
+            self.params['nu2'],
+        ) = LB.twiss_from_norm_matrix(self.params['V'])

@@ -1,12 +1,19 @@
-"""Lebedev-Bogacz parameterization of coupled motion.
-
-Under developement. Some of these methods have not been tested in a while.
-
-References
-----------
-[1] https://iopscience.iop.org/article/10.1088/1748-0221/5/10/P10010
-"""
 import numpy as np
+from scipy.linalg import block_diag
+
+
+def unit_symplectic_matrix(n=2):
+    """Construct 2n x 2n unit symplectic matrix.
+
+    Each 2 x 2 block is [[0, 1], [-1, 0]]. This assumes our phase space vector
+    is ordered as [x, x', y, y', ...].
+    """
+    if n % 2 != 0:
+        raise ValueError("n must be an even integer")
+    U = np.zeros((n, n))
+    for i in range(0, n, 2):
+        U[i : i + 2, i : i + 2] = [[0.0, 1.0], [-1.0, 0.0]]
+    return U
 
 
 def normalize(eigvecs):
@@ -16,6 +23,7 @@ def normalize(eigvecs):
         Each column is an eigenvector.
     """
     n = eigvecs.shape[0]
+    U = unit_symplectic_matrix(n)
     for i in range(0, n, 2):
         v = eigvecs[:, i]
         # Find out if we need to swap.
@@ -26,7 +34,7 @@ def normalize(eigvecs):
     return eigvecs
 
 
-def norm_mat_from_eigvecs(eigvecs):
+def norm_matrix_from_eigvecs(eigvecs):
     """Construct symplectic normalization matrix.
 
     eigvecs: ndarray, shape (2n, 2n)
@@ -40,7 +48,7 @@ def norm_mat_from_eigvecs(eigvecs):
     return V
 
 
-def norm_mat_from_twiss_one_mode(alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu, mode=1):
+def norm_matrix_from_twiss_one_mode(alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu, mode=1):
     cos, sin = np.cos(nu), np.sin(nu)
     V = np.zeros((4, 4))
     if mode == 1:
@@ -70,7 +78,7 @@ def norm_mat_from_twiss_one_mode(alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu, mo
     return V
 
 
-def twiss_from_norm_mat(V):
+def twiss_from_norm_matrix(V):
     beta_1x = V[0, 0] ** 2
     beta_2y = V[2, 2] ** 2
     alpha_1x = -np.sqrt(beta_1x) * V[1, 0]
@@ -97,32 +105,20 @@ def twiss_from_norm_mat(V):
     )
 
 
-def analyze_transfer_matrix(M):
-    """Return parameter dict from 4 x 4 transfer matrix."""
-    eigvals, eigvecs = np.linalg.eig(M)
-    V = norm_mat_from_eigvecs(eigvecs)
-    params = dict()
-    (
-        params["alpha_1x"],
-        params["beta_1x"],
-        params["alpha_1y"],
-        params["beta_1y"],
-        params["alpha_2x"],
-        params["beta_2x"],
-        params["alpha_2y"],
-        params["beta_2y"],
-        params["u"],
-        params["nu1"],
-        params["nu2"],
-    ) = twiss_from_norm_mat(V)
-    params["V"] = V
-
-
 def matched_cov(M, *intrinsic_emittances):
     eigvals, eigvecs = np.linalg.eig(M)
-    V = norm_mat_from_eigvecs(eigvecs)
+    V = norm_matrix_from_eigvecs(eigvecs)
     Sigma_n = np.diag(np.repeat(intrinsic_emittances, 2))
     return np.linalg.multi_dot([V, Sigma_n, V.T])
+
+
+def symplectic_diag(self, Sigma):
+    """Symplectic diagonalization of covariance matrix `Sigma`."""
+    U = unit_symplectic_matrix(4)
+    eigvals, eigvecs = np.linalg.eig(np.matmul(Sigma, U))
+    V = norm_matrix_from_eigvecs(eigvecs)
+    Vinv = np.linalg.inv(V)
+    return np.linalg.multi_dot([Vinv, Sigma, Vinv.T])
 
 
 def cov_from_twiss_one_mode(alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu, eps, mode=1):
@@ -159,11 +155,3 @@ def cov_from_twiss_one_mode(alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu, eps, mo
             [s14, s24, s34, s44],
         ]
     )
-
-
-def symplectic_diag(Sigma):
-    """Symplectic diagonalization of covariance matrix `Sigma`."""
-    U = unit_symplectic_matrix(4)
-    eigvals, eigvecs = np.linalg.eig(np.matmul(Sigma, U))
-    Vinv = np.linalg.inv(norm_mat_from_eigvecs(eigvecs))
-    return np.linalg.multi_dot([Vinv, Sigma, Vinv.T])
