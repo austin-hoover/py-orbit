@@ -15,8 +15,6 @@ def normalize(eigvecs):
     eigvecs: ndarray, shape (2n, 2n)
         Each column is an eigenvector.
     """
-    if eigvecs.shape[0] != eigvecs.shape[1]:
-        raise ValueError("Shape of `eigvecs` is wrong.")
     n = eigvecs.shape[0]
     for i in range(0, n, 2):
         v = eigvecs[:, i]
@@ -100,24 +98,24 @@ def twiss_from_norm_mat(V):
 
 
 def analyze_transfer_matrix(M):
-    """Return parameter dict from 4 x 4 transfer matrix.""" 
+    """Return parameter dict from 4 x 4 transfer matrix."""
     eigvals, eigvecs = np.linalg.eig(M)
     V = norm_mat_from_eigvecs(eigvecs)
     params = dict()
     (
-        params['alpha_1x'],
-        params['beta_1x'],
-        params['alpha_1y'],
-        params['beta_1y'],
-        params['alpha_2x'],
-        params['beta_2x'],
-        params['alpha_2y'],
-        params['beta_2y'],
-        params['u'],
-        params['nu1']
-        params['nu2']
+        params["alpha_1x"],
+        params["beta_1x"],
+        params["alpha_1y"],
+        params["beta_1y"],
+        params["alpha_2x"],
+        params["beta_2x"],
+        params["alpha_2y"],
+        params["beta_2y"],
+        params["u"],
+        params["nu1"],
+        params["nu2"],
     ) = twiss_from_norm_mat(V)
-    params['V'] = V
+    params["V"] = V
 
 
 def matched_cov(M, *intrinsic_emittances):

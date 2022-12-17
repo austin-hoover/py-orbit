@@ -6,5 +6,10 @@ References
 """
 
 
+def normalize(eigvecs):
+    # [To do...]
+    return eigvecs
+
+
 def analyze_transfer_matrix(M):
     raise NotImplementedError
