@@ -72,15 +72,14 @@ class TBTDiagnosticsNode(DriftTEAPOT):
         self.skip = skip
         self.active = active
         self.remember = remember
-        
-    def measure(self, bunch):
-        return
 
     def track(self, params_dict):
         """Track the bunch."""
         bunch = params_dict["bunch"]
         if self.should_measure():
-            self.register(self.measure(bunch))
+            self.clear_data()
+            self.data.append(self.measure(bunch))
+            self.turns.append(self.turn)
         self.turn += 1
 
     def should_measure(self):
@@ -92,12 +91,6 @@ class TBTDiagnosticsNode(DriftTEAPOT):
         if self.turn > 0 and self.turn  % (self.skip + 1) != 0:
             return False
         return True
-              
-    def register(self, item):
-        """Store measured item and turn number."""
-        self.clear_data()
-        self.data.append(item)
-        self.turns.append(self.turn)
 
     def clear_data(self):
         """Clear stored data (without resetting the turn counter)."""
@@ -106,7 +99,10 @@ class TBTDiagnosticsNode(DriftTEAPOT):
             self.turns = self.turns[-self.remember:]
         elif not self.remember:
             self.data = []
-            self.turns = []            
+            self.turns = [] 
+            
+    def measure(self, bunch):
+        return
         
     def package_data(self):
         return
