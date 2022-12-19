@@ -1,9 +1,9 @@
-"""Analysis of linear, periodic transfer maps."""
 import numpy as np
 from scipy.linalg import block_diag
 
-import orbit.twiss.courant_snyder as CS
-import orbit.twiss.lebedev_bogacz as LB
+import parameterizations.courant_snyder as CS
+import parameterizations.lebedev_bogacz as LB
+import parameterizations.edwards_teng as ET
 
 
 def unit_symplectic_matrix(n=2):
@@ -62,14 +62,24 @@ def all_eigvals_on_unit_circle(eigvals, tol=1.0e-8):
 
 
 def eigtunes_from_eigvals(eigvals):
-    """Return eigentune from eigenvalue of symplectic matrix.
+    """Return eigentunes from eigenvalues of symplectic matrix.
 
-    They are related as: eigval = Re[exp(-i * (2 * pi * tune))], where i is the imaginary unit.
+    They are related as: eigval = exp(-i * (2 * pi * tune)), where i is the imaginary unit.
 
-    eigvals : ndarray, shape (n,)
+    Parameters
+    ----------
+    eigvals : ndarray, shape (2n,)
         Eigenvalues of a symplectic transfer matrix.
+        
+    Returns
+    -------
+    ndarray, shape (n,)
+        The eigentunes.
     """
-    return np.arccos(eigvals.real)[[0, 2]] / (2.0 * np.pi)
+    def eigtune_from_eigval(eigval):
+        return np.arccos(eigval.real) / (2.0 * np.pi)
+    
+    return np.array([eigtune_from_eigval(eigvals[k]) for k in (0, 2)])
 
 
 def phase_adv_matrix(*phase_advances):
@@ -92,6 +102,10 @@ def phase_adv_matrix(*phase_advances):
 
     mats = [rotation_matrix(phase_advance) for phase_advance in phase_advances]
     return block_diag(*mats)
+
+
+def normal_form(M, V):
+    return np.linalg.multi_dot([np.linalg.inv(V), M, V])
 
 
 def construct_transfer_matrix(norm_matrix, phase_adv_matrix):
@@ -207,3 +221,18 @@ class LebedevBogacz(TransferMatrixAnalysis):
             self.params['nu1'],
             self.params['nu2'],
         ) = LB.twiss_from_norm_matrix(self.params['V'])
+        
+    def matched_cov(*intrinsic_emittances):
+        V = self.params['V']
+        Sigma_n = np.diag(np.repeat(intrinsic_emittances, 2))
+        return np.linalg.multi_dot([V, Sigma_n, V.T])
+        
+        
+class EdwardsTeng(TransferMatrixAnalysis):
+    
+    def __init__(self, M):
+        TransferMatrixAnalysis.__init__(self, M)
+        self.analyze()
+
+    def analyze(self):
+        raise NotImplementedError

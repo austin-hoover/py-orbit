@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import block_diag
 
 
-def normalize(eigvects):
+def normalize(eigvecs):
     return eigvecs
 
 

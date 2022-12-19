@@ -1,3 +1,7 @@
+"""Lebedev-Bogacz parameterization of linear coupled motion.
+
+Work in progress. Need to re-check for typos.
+"""
 import numpy as np
 from scipy.linalg import block_diag
 
@@ -34,13 +38,16 @@ def normalize(eigvecs):
     return eigvecs
 
 
-def norm_matrix_from_eigvecs(eigvecs):
+def norm_matrix_from_eigvecs(eigvecs, norm=True):
     """Construct symplectic normalization matrix.
 
     eigvecs: ndarray, shape (2n, 2n)
         Each column is an eigenvector. We assume they are not normalized.
+    norm : bool
+        If False, assume the eigenvectors are already normalized.
     """
-    eigvecs = normalize(eigvecs.copy())
+    if norm:
+        eigvecs = normalize(eigvecs.copy())
     V = np.zeros(eigvecs.shape)
     for i in range(0, V.shape[1], 2):
         V[:, i] = eigvecs[:, i].real

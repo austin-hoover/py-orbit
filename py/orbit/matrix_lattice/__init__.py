@@ -10,4 +10,3 @@ __all__ = []
 __all__.append("MATRIX_Lattice")
 __all__.append("MATRIX_Lattice_Coupled")
 __all__.append("BaseMATRIX")
-

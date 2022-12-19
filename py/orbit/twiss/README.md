@@ -1,1 +1,0 @@
-The purpose of this module is to implement the various parameterizations of linear motion.

@@ -11,12 +11,20 @@ from orbit.lattice import AccNode
 from orbit.lattice import AccNodeBunchTracker
 from orbit.matrix_lattice.BaseMATRIX import BaseMATRIX
 from orbit.matrix_lattice.MATRIX_Lattice import MATRIX_Lattice
+from orbit.matrix_lattice import transfer_matrix_analysis
 from orbit.teapot_base import MatrixGenerator
-from orbit.twiss import twiss
 from orbit.utils import orbitFinalize
 from orbit.utils.consts import speed_of_light
-from orbit.utils.utils import orbit_matrix_to_numpy
 from orbit_utils import Matrix
+
+
+def orbit_matrix_to_numpy(matrix):
+    """Return ndarray from two-dimensional orbit matrix."""
+    array = np.zeros(matrix.size())
+    for i in range(array.shape[0]):
+        for j in range(array.shape[1]):
+            array[i, j] = matrix.get(i, j)
+    return array
 
 
 class MATRIX_Lattice_Coupled(MATRIX_Lattice):
@@ -62,20 +70,13 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
         params["mass"] = mass
         params["kin_energy"] = kin_energy
 
-        # Longitudinal parameters
-        ring_length = self.getLength()
-        period = ring_length / (beta * speed_of_light)
-        params["period"] = period
-        params["frequency"] = 1.0 / period
-        ## I am not yet sure how to handle dispersion/chromaticity when the transverse
-        ## motion is x-y coupled. I assume this is done elsewhere, such as in
-        ## BMAD or MADX using the Edwards-Teng parameterization.
-
         # Transverse parameters
         M = orbit_matrix_to_numpy(self.oneTurnMatrix)
         tmat = None
+        if self.parameterization == 'CS':
+            tmat = transfer_matrix_analysis.CourantSnyder(M)
         if self.parameterization == 'LB':
-            tmat = twiss.LebedevBogacz(M)
+            tmat = transfer_matrix_analysis.LebedevBogacz(M)
         else:
             raise ValueError('Invalid parameterization.')
         params["eigvals"] = tmat.eigvals
@@ -84,6 +85,15 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
         params["stable"] = tmat.stable
         params["coupled"] = tmat.coupled
         params.update(**tmat.params)
+        
+        # Longitudinal parameters
+        ring_length = self.getLength()
+        period = ring_length / (beta * speed_of_light)
+        params["period"] = period
+        params["frequency"] = 1.0 / period
+        
+        # Dispersion/chromaticity when for coupled motion...
+        # [...]
 
         return params
 
