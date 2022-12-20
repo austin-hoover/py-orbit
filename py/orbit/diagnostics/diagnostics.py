@@ -106,6 +106,18 @@ class TBTDiagnosticsNode(DriftTEAPOT):
         
     def package_data(self):
         return
+    
+    
+class DumpBunchNode(DriftTEAPOT):
+    def __init__(self, filename="bunch.dat", name="write_bunch_coords"):
+        DriftTEAPOT.__init__(self, name)
+        self.filename = filename
+        self.active = True
+
+    def track(self, params_dict):
+        if self.active:
+            bunch = params_dict["bunch"]
+            bunch.dumpBunch(self.filename)
         
 
 class BunchCoordsNode(TBTDiagnosticsNode):
