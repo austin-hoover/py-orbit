@@ -23,9 +23,102 @@ from orbit_mpi import mpi_datatype
 from orbit_mpi import mpi_op
 
 
+def get_bunch_coords(bunch, axis=None, transformer=None, sample=None):
+    """Return the phase space coordinate array.
+
+    Parameters
+    ----------
+    axis : tuple
+        The dimensions to keep. For example, `axis=(0, 1, 2, 3)` keeps the 
+        transverse coordinates. The default is to keep all dimensions.
+    transformer : callable
+        Transforms the six-dimensional coordinate array.
+    sample : int or float
+        If greater than 1 and less than the size of the bunch, randomly select
+        this many particles.
+    """
+    if axis is None:
+        axis = tuple(range(6))
+    X = np.zeros((bunch.getSize(), 6))
+    for i in range(X.shape[0]):
+        X[i, :] = [
+            bunch.x(i),
+            bunch.xp(i),
+            bunch.y(i),
+            bunch.yp(i),
+            bunch.z(i),
+            bunch.dE(i),
+        ]
+    if transformer is not None:
+        X = transformer(X)
+    if sample is not None:
+        if 0.0 < sample < 1.0:
+            sample = sample * X.shape[0]
+        sample = int(min(sample, X.shape[0]))
+        idx = np.random.choice(X.shape[0], sample, replace=False)
+        X = X[idx, :]
+    return X[:, axis]
+
+
+def get_bunch_centroid(bunch, bunch_twiss_analysis=None):
+    if bunch_twiss_analysis is None:
+        bunch_twiss_analysis = BunchTwissAnalysis()
+    bunch_twiss_analysis.analyzeBunch(bunch)
+    # Determine the rank of the present node if MPI operations are enabled.
+    rank = 0  # default is primary node
+    mpi_init = orbit_mpi.MPI_Initialized()
+    comm = orbit_mpi.mpi_comm.MPI_COMM_WORLD
+    if mpi_init:
+        rank = orbit_mpi.MPI_Comm_rank(comm)
+    # Only the primary node needs to output the calculated information.
+    if rank == 0:
+        centroid = np.zeros(6)
+        for i in range(6):
+            centroid[i] = bunch_twiss_analysis.getAverage(i)
+        return centroid
+
+
+def get_bunch_cov(
+    bunch, dispersion_flag=False, emit_norm_flag=False, bunch_twiss_analysis=None
+):
+    if bunch_twiss_analysis is None:
+        bunch_twiss_analysis = BunchTwissAnalysis()
+    dispersion_flag = int(dispersion_flag)
+    emit_norm_flag = int(emit_norm_flag)
+    order = 2
+    bunch_twiss_analysis.computeBunchMoments(
+        bunch, order, dispersion_flag, emit_norm_flag
+    )
+    # Determine the rank of the present node if MPI operations are enabled.
+    rank = 0  # default is primary node
+    mpi_init = orbit_mpi.MPI_Initialized()
+    comm = orbit_mpi.mpi_comm.MPI_COMM_WORLD
+    if mpi_init:
+        rank = orbit_mpi.MPI_Comm_rank(comm)
+    # Only the primary node needs to output the calculated information.
+    if rank == 0:
+        cov = np.zeros((6, 6))
+        for i in range(6):
+            for j in range(i + 1):
+                cov[i, j] = bunch_twiss_analysis.getCorrelation(i, j)
+        return cov
+    
+    
+class DumpBunchNode(DriftTEAPOT):
+    def __init__(self, filename="bunch.dat", name="write_bunch_coords"):
+        DriftTEAPOT.__init__(self, name)
+        self.filename = filename
+        self.active = True
+
+    def track(self, params_dict):
+        if self.active:
+            bunch = params_dict["bunch"]
+            bunch.dumpBunch(self.filename)
+
+
 class TBTDiagnosticsNode(DriftTEAPOT):
     """Turn-by-turn diagnostics node.
-        
+
     Attributes
     ----------
     name : str
@@ -88,50 +181,27 @@ class TBTDiagnosticsNode(DriftTEAPOT):
             return False
         if not self.active:
             return False
-        if self.turn > 0 and self.turn  % (self.skip + 1) != 0:
+        if self.turn > 0 and self.turn % (self.skip + 1) != 0:
             return False
         return True
 
     def clear_data(self):
         """Clear stored data (without resetting the turn counter)."""
         if type(self.remember) is int and self.remember > 0:
-            self.data = self.data[-self.remember:]
-            self.turns = self.turns[-self.remember:]
+            self.data = self.data[-self.remember :]
+            self.turns = self.turns[-self.remember :]
         elif not self.remember:
             self.data = []
-            self.turns = [] 
-            
+            self.turns = []
+
     def measure(self, bunch):
         return
-        
+
     def package_data(self):
         return
-    
-    
-class DumpBunchNode(DriftTEAPOT):
-    def __init__(self, filename="bunch.dat", name="write_bunch_coords"):
-        DriftTEAPOT.__init__(self, name)
-        self.filename = filename
-        self.active = True
 
-    def track(self, params_dict):
-        if self.active:
-            bunch = params_dict["bunch"]
-            bunch.dumpBunch(self.filename)
-        
 
 class BunchCoordsNode(TBTDiagnosticsNode):
-    """Measure the phase space coordinate array.
-
-    axis : tuple
-        The dimensions to keep. For example, `axis=(0, 1, 2, 3)` keeps the transverse coordinates.
-        Default is to keep all dimensions.
-    transformer : callable
-        Transforms the six-dimensional coordinate array.
-    sample : int or float
-        If greater than 1 and less than the size of the bunch, randomly select
-        this many particles.
-    """
     def __init__(self, axis=None, transformer=None, sample=None, **kws):
         TBTDiagnosticsNode.__init__(self, **kws)
         self.axis = axis
@@ -139,37 +209,20 @@ class BunchCoordsNode(TBTDiagnosticsNode):
             self.axis = tuple(range(6))
         self.transformer = transformer
         self.sample = sample
-        
+
     def measure(self, bunch):
-        X = np.zeros((bunch.getSize(), 6))
-        for i in range(X.shape[0]):
-            X[i, :] = [
-                bunch.x(i),
-                bunch.xp(i),
-                bunch.y(i),
-                bunch.yp(i),
-                bunch.z(i),
-                bunch.dE(i),
-            ]
-        if self.transformer is not None:
-            X = self.transformer(X)
-        if self.sample is not None:
-            sample = self.sample
-            if 0.0 < sample < 1.0:
-                sample = sample * X.shape[0]
-            sample = int(min(sample, X.shape[0]))
-            idx = np.random.choice(X.shape[0], sample, replace=False)
-            X = X[idx, :]
-        return X[:, self.axis]
-    
+        return get_bunch_coords(
+            bunch, axis=self.axis, transformer=self.transformer, sample=self.sample
+        )
+
 
 class DanilovBunchCoordsNode(TBTDiagnosticsNode):
     def __init__(self, **kws):
         TBTDiagnosticsNode.__init__(self, **kws)
-    
+
     def measure(self, bunch):
         """Measure the envelope parameters and test bunch coordinates.
-    
+
         Parameters
         ----------
         bunch : Bunch
@@ -193,50 +246,29 @@ class DanilovBunchCoordsNode(TBTDiagnosticsNode):
                 The phase space coordinates of the test particles. Each test particle
                 responds to the space charge field defined by the envelope. Test
                 particles do not affect each other or the envelope.
-            """
-        X_bunch = np.zeros((bunch.getSize(), 6))
-        for i in range(bunch.getSize()):
-            X_bunch[i, :] = [
-                bunch.x(i),
-                bunch.xp(i),
-                bunch.y(i),
-                bunch.yp(i),
-                bunch.z(i),
-                bunch.dE(i),
-            ]
+        """
+        X_bunch = get_bunch_coords(bunch)
         a, ap, e, ep = X_bunch[0, :4]
         b, bp, f, fp = X_bunch[1, :4]
         params = np.array([a, b, ap, bp, e, f, ep, fp])
         X = None
         if X_bunch.shape[0] > 2:
-             X = X_bunch[2:, :]
-        return {'params': params, 'X': X}
-        
-        
+            X = X_bunch[2:, :]
+        return {"params": params, "X": X}
+
+
 class FirstOrderMomentsNode(TBTDiagnosticsNode):
     def __init__(self, **kws):
         TBTDiagnosticsNode.__init__(self, **kws)
         self.bunch_twiss_analysis = BunchTwissAnalysis()
-        
+
     def measure(self, bunch):
-        self.bunch_twiss_analysis.analyzeBunch(bunch)
-        # Determine the rank of the present node if MPI operations are enabled.
-        rank = 0  # default is primary node
-        mpi_init = orbit_mpi.MPI_Initialized()
-        comm = orbit_mpi.mpi_comm.MPI_COMM_WORLD
-        if mpi_init:
-            rank = orbit_mpi.MPI_Comm_rank(comm)
-        # Only the primary node needs to output the calculated information.
-        if rank == 0:
-            centroid = np.zeros(6)
-            for i in range(6):
-                centroid[i] = self.bunch_twiss_analysis.getAverage(i)
-            return centroid
-        
+        return get_bunch_centroid(bunch, bunch_twiss_analysis=self.bunch_twiss_analysis)
+
     def package_data(self):
         self.data = np.vstack(self.data)
-        
-        
+
+
 class SecondOrderMomentsNode(TBTDiagnosticsNode):
     def __init__(self, dispersion_flag=False, emit_norm_flag=False, **kws):
         TBTDiagnosticsNode.__init__(self, **kws)
@@ -244,27 +276,19 @@ class SecondOrderMomentsNode(TBTDiagnosticsNode):
         self.dispersion_flag = int(dispersion_flag)
         self.emit_norm_flag = int(emit_norm_flag)
         self.order = 2
-        
+
     def measure(self, bunch):
-        self.bunch_twiss_analysis.computeBunchMoments(bunch, self.order, self.dispersion_flag, self.emit_norm_flag)
-        # Determine the rank of the present node if MPI operations are enabled.
-        rank = 0  # default is primary node
-        mpi_init = orbit_mpi.MPI_Initialized()
-        comm = orbit_mpi.mpi_comm.MPI_COMM_WORLD
-        if mpi_init:
-            rank = orbit_mpi.MPI_Comm_rank(comm)
-        # Only the primary node needs to output the calculated information.
-        if rank == 0:
-            cov = np.zeros((6, 6))
-            for i in range(6):
-                for j in range(i + 1):
-                    cov[i, j] = self.bunch_twiss_analysis.getCorrelation(i, j)
-            return cov
-        
+        return get_bunch_cov(
+            bunch,
+            dispersion_flag=self.dispersion_flag,
+            emit_norm_flag=self.emit_norm_flag,
+            bunch_twiss_analysis=self.bunch_twiss_analysis,
+        )
+
     def package_data(self):
         self.data = np.array(self.data)
-        
-    
+
+
 class TeapotTuneAnalysisNode(DriftTEAPOT):
     """Measures the transverse tunes."""
 
@@ -292,8 +316,8 @@ class TeapotTuneAnalysisNode(DriftTEAPOT):
     def track(self, params_dict):
         bunch = params_dict["bunch"]
         self.bunch_tune_analysis.analyzeBunch(bunch)
-        
-    
+
+
 # An following is an old class that I may delete:
 class Wire:
     """Represents a single wire.
