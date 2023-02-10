@@ -2,23 +2,15 @@
 Module. Includes classes for all time-dependent lattice.
 """
 import sys
-import os
-import math
 
+from orbit.lattice import AccNode
 from orbit.teapot import TEAPOT_Ring
-from orbit.parsers.mad_parser import MAD_Parser, MAD_LattLine
-from orbit.lattice import AccNode, AccActionsContainer
 from orbit.time_dep import waveform
 
 
 class TIME_DEP_Lattice(TEAPOT_Ring):
-	"""
-	The subclass of the TEAPOT_Lattice.
-	TIME_DEP_Lattice has the ability to set time-dependent
-        parameters to the Lattice.
-	Multi-turn track also available.
-	"""
-
+	"""Set time-dependent parameters in the lattice."""
+    
 	def __init__(self, name = "no name"):
 		TEAPOT_Ring.__init__(self, name)
 		self.__latticeDict = {}
@@ -34,29 +26,24 @@ class TIME_DEP_Lattice(TEAPOT_Ring):
 		for i in range(len(accNodes)):
 			elem = accNodes[i]
 			elemname = elem.getName()
-			if(elemInLine.has_key(elemname)):
+			if elemInLine.has_key(elemname):
 				elemInLine[elemname] += 1
-			else:	elemInLine[elemname] = 1
+			else:	
+                elemInLine[elemname] = 1
 			node = self.getNodes()[i]
-			node.setParam("TPName", node.getName() + \
-                                      "_" + str(elemInLine[elemname]))
-			#node.setParam("sequence", i + 1)
-			#print "debug node", node.getName(), \
-                                #node.getParamsDict()
+			node.setParam("TPName", node.getName() +  "_" + str(elemInLine[elemname]))
 
 	def setTimeDepNode(self, TPName, waveform):
-		"""
-		Sets the waveform function to the TP node before track.
-		"""
-        	flag = 0
-                for node in self.getNodes():
-                        if(TPName == node.getParam("TPName")):
-                                flag = 1
-                                node.setParam("waveform",waveform)
-                                self.__TDNodeDict[TPName] = node
-                if not flag:
-                        print "The", TPName, "is not found."
-                        sys.exit(1)
+		"""Sets the waveform function to the TP node before track."""
+        flag = 0
+            for node in self.getNodes():
+                if TPName == node.getParam("TPName"):
+                    flag = 1
+                    node.setParam("waveform",waveform)
+                    self.__TDNodeDict[TPName] = node
+            if not flag:
+                    print "The", TPName, "is not found."
+                    sys.exit(1)
 
 	def setTimeDepStrength(self, time):
 		"""
@@ -70,12 +57,10 @@ class TIME_DEP_Lattice(TEAPOT_Ring):
 			waveformType = waveform.getType()
 			if waveformType == "kicker waveform":
 				if node.getType() == "kick teapot":
-					self.setParam(node, "kx", \
-                                                      waveform.getKx())
-					self.setParam(node, "ky", \
-                                                      waveform.getKy())
-				else: print "No kicker waveform added. \
-                                Please check node type."
+					self.setParam(node, "kx", waveform.getKx())
+					self.setParam(node, "ky", waveform.getKy())
+				else: 
+                    print "No kicker waveform added.  Please check node type."
 			elif waveformType == "magnet waveform":
 				strength = waveform.getStrength()
 				if node.getType() == "multipole teapot":
@@ -85,8 +70,8 @@ class TIME_DEP_Lattice(TEAPOT_Ring):
 					self.setParam(node,"kq",strength)
 				elif node.getType() == "solenoid teapot":
 					self.setParam(node,"B",strength)
-				else: print "No magnet waveform added. \
-                                Please check node type."
+				else: 
+                    print "No magnet waveform added. Please check node type."
 
 	def setParam(self, node, Kparam, strength):
 		if node.hasParam(Kparam):
@@ -94,8 +79,7 @@ class TIME_DEP_Lattice(TEAPOT_Ring):
 			if Kparam == "kls":
 				newparamval = []
 				for i in range(len(paramval)):
-					newparamval.append(paramval[i] * \
-                                                           strength)
+					newparamval.append(paramval[i] * strength)
 				paramval = newparamval
 			else:paramval = paramval * strength
 			node.setParam(Kparam,paramval)
@@ -105,16 +89,12 @@ class TIME_DEP_Lattice(TEAPOT_Ring):
 		It tracks the bunch through the lattice with multi-turn.
 		"""
 		turns = self.__turns
-		#start
 		for i in range(turns - 1):
 			self.trackBunch(bunch)
 			syncPart = bunch.getSyncParticle()
 			time = syncPart.time()
 			self.setTimeDepStrength(time)
-			print "debug trackBunchTurns time", \
-                                time, "in" , i, "turn"
-		#getsublattice
-		#sublattice.trackBunch(bunch)
+			print "debug trackBunchTurns time", time, "in" , i, "turn"
 
 	def setTurns(self, turns, startPosition = 0, endPosition = -1):
 		"""
@@ -125,7 +105,6 @@ class TIME_DEP_Lattice(TEAPOT_Ring):
 		self.addNode(startNode, startPosition)
 		self.addNode(endNode, endPosition)
 		self.__turns = turns
-		#print self.getNodes()
 
 
 class StartNode(AccNode):
@@ -135,7 +114,6 @@ class StartNode(AccNode):
 
 	def track(self, paramsDict):
 		bunch = paramsDict["bunch"]
-		#bunch.getSyncParticle().time(0.)
 
 
 class EndNode(AccNode):
