@@ -61,4 +61,3 @@ def addTeapotInjectionNode(lattice, position, injection_node):
 
 		
 
-
