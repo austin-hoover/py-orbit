@@ -21,9 +21,16 @@ def add_diagnostics_node_as_child(
     node entrance/exit.)
     """
     diagnostics_node.setName(
-        '{}:{}:{}'.format(parent_node.getName(), diagnostics_node.getName(), part_index)
+        '{}:{}:{}'.format(
+            parent_node.getName(), 
+            diagnostics_node.getName(), 
+            part_index,
+        )
     )
-    diagnostics_node.setTiltAngle(-parent_node.getTiltAngle())
+    try:
+        diagnostics_node.setTiltAngle(-parent_node.getTiltAngle())
+    except:
+        pass
     parent_node.addChildNode(
         diagnostics_node, 
         parent_node.ENTRANCE, 
