@@ -105,13 +105,16 @@ def get_bunch_cov(
     
     
 class DumpBunchNode(DriftTEAPOT):
-    def __init__(self, filename="bunch.dat", name="write_bunch_coords"):
+    def __init__(self, filename="bunch.dat", name="write_bunch_coords", verbose=False):
         DriftTEAPOT.__init__(self, name)
         self.filename = filename
         self.active = True
+        self.verbose = verbose
 
     def track(self, params_dict):
         if self.active:
+            if self.verbose:
+                print("Writing bunch coordinates to file '{}'".format(self.filename))
             bunch = params_dict["bunch"]
             bunch.dumpBunch(self.filename)
 
@@ -170,7 +173,6 @@ class TBTDiagnosticsNode(DriftTEAPOT):
         """Track the bunch."""
         bunch = params_dict["bunch"]
         if self.should_measure():
-            self.clear_data()
             self.data.append(self.measure(bunch))
             self.turns.append(self.turn)
         self.turn += 1
