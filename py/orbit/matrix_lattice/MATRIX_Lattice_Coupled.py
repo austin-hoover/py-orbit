@@ -79,6 +79,7 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
             tmat = transfer_matrix_analysis.LebedevBogacz(M)
         else:
             raise ValueError('Invalid parameterization.')
+        params["M"] = M
         params["eigvals"] = tmat.eigvals
         params["eigvecs"] = tmat.eigvecs
         params["eigtunes"] = tmat.eigtunes
