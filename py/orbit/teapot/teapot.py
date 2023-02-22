@@ -671,7 +671,11 @@ class SolenoidTEAPOT(NodeTEAPOT):
 		useCharge = 1
 		if(paramsDict.has_key("useCharge")): \
                   useCharge = paramsDict["useCharge"]
-		TPB.soln(bunch, length, B, useCharge)
+		# Temporary fix: B=0 gives divide by zero error.
+		if B == 0.0:
+			TPB.drift(bunch, length)
+		else:
+			TPB.soln(bunch, length, B, useCharge)
 
 	def setWaveform(self, waveform):
 		"""
