@@ -33,8 +33,21 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
     def __init__(self, name=None, parameterization='LB'):
         MATRIX_Lattice.__init__(self, name)
         self.parameterization = parameterization
-
-    def getRingParametersDict(self, momentum=None, mass=None):
+        self.one_turn_matrices = dict()
+        
+    def getOneTurnMatrices(self):
+        """Return one-turn transfer matrix at each node."""
+        self.one_turn_matrices = dict()
+        M = orbit_matrix_to_numpy(self.getOneTurnMatrix())
+        for node in self.getNodes():
+            if isinstance(node, BaseMATRIX):
+                M_node = orbit_matrix_to_numpy(node.getMatrix())
+                M_node_inv = np.linalg.inv(M_node)
+                M = np.linalg.multi_dot([M_node, M, M_node_inv])
+                self.one_turn_matrices[node] = M
+        return self.one_turn_matrices      
+        
+    def getRingParametersDict(self, momentum=None, mass=None, node=None):
         """Analyze the one-turn transfer matrix.
 
         Parameters
@@ -43,8 +56,8 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
             Syncronous particle momentum [GeV / c].
         mass : float
             Particle mass [GeV / c^2].
-        parameterization : str
-            The parameterization to use.
+        node : orbit.lattice.AccNode or str (optional)
+            The node to use as the start of the lattice.
 
         Returns
         -------
@@ -55,12 +68,12 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
             * 'eigvals' : Eigenvalues of transverse matrix.
             * 'eigvecs' : Eigenvectors of transverse matrix.
             * 'eigtunes' : Transverse tunes computed from the eigenvalues.
-            * 'stable' : Whether the transverse motion is bounded.
-            * 'coupled`: Whether the transverse motino is coupled.
+            * 'stable' : Whether the transverse motion is stable.
+            * 'coupled`: Whether the transverse motion is coupled.
             * Transverse parameters depend on the parameterization.
         """
         params = dict()
-
+        
         # Synchonous particle
         energy = math.sqrt(momentum**2 + mass**2)
         beta = momentum / energy
@@ -71,35 +84,35 @@ class MATRIX_Lattice_Coupled(MATRIX_Lattice):
         params["kin_energy"] = kin_energy
 
         # Transverse parameters
-        M = orbit_matrix_to_numpy(self.oneTurnMatrix)
-        tmat = None
+        if node is None:
+            M = orbit_matrix_to_numpy(self.oneTurnMatrix)
+        else:
+            if type(node) is str:
+                node = self.getNodeForName(node)
+            if not self.one_turn_matrices:
+                self.one_turn_matrices = self.getOneTurnMatrices()
+            M = self.one_turn_matrices[node]
+            
         if self.parameterization == 'CS':
             tmat = transfer_matrix_analysis.CourantSnyder(M)
         if self.parameterization == 'LB':
             tmat = transfer_matrix_analysis.LebedevBogacz(M)
         else:
             raise ValueError('Invalid parameterization.')
+            
+        params.update(**tmat.params)
         params["M"] = M
         params["eigvals"] = tmat.eigvals
         params["eigvecs"] = tmat.eigvecs
         params["eigtunes"] = tmat.eigtunes
         params["stable"] = tmat.stable
         params["coupled"] = tmat.coupled
-        params.update(**tmat.params)
-        
+    
         # Longitudinal parameters
         ring_length = self.getLength()
         period = ring_length / (beta * speed_of_light)
         params["period"] = period
-        params["frequency"] = 1.0 / period
-        
-        # Dispersion/chromaticity when for coupled motion...
+        params["frequency"] = 1.0 / period     
         # [...]
-
+        
         return params
-
-    def trackTwiss(self):
-        raise NotImplementedError
-    
-    def trackDispersion(self):
-        raise NotImplementedError

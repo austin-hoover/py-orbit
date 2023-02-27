@@ -24,8 +24,6 @@ def twiss_from_2x2_transfer_matrix(M):
 def twiss_from_transfer_matrix(M):
     """Compute parameters from periodic, uncoupled 4 x 4 transfer matrix M.
 
-    The tunes do not need to be computed in this method.
-
     Parameters
     ----------
     M : ndarray, shape (4, 4)
@@ -49,6 +47,14 @@ def twiss_from_transfer_matrix(M):
     params["alpha_y"] = params_y["alpha"]
     params["beta_x"] = params_x["beta"]
     params["beta_y"] = params_y["beta"]
+    return {
+        "alpha_x": params_x["alpha"],
+        "alpha_y": params_y["alpha"],
+        "beta_x": params_x["beta"],
+        "beta_y": params_y["beta"],
+        "tune_x": params_x["tune"],
+        "tune_y": params_y["tune"]
+    }
     
     
 def norm_matrix_from_twiss(*twiss_params):

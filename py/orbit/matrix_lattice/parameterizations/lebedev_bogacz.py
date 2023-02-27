@@ -1,6 +1,6 @@
 """Lebedev-Bogacz parameterization of linear coupled motion.
 
-Work in progress. Need to re-check for typos.
+Work in progress.
 """
 import numpy as np
 from scipy.linalg import block_diag
@@ -56,32 +56,27 @@ def norm_matrix_from_eigvecs(eigvecs, norm=True):
 
 
 def norm_matrix_from_twiss_one_mode(alpha_lx, beta_lx, alpha_ly, beta_ly, u, nu, mode=1):
-    cos, sin = np.cos(nu), np.sin(nu)
+    cs = np.cos(nu)
+    sn = np.sin(nu)
     V = np.zeros((4, 4))
     if mode == 1:
-        V[:2, :2] = [
-            [np.sqrt(beta_lx), 0],
-            [-alpha_lx / np.sqrt(beta_lx), (1 - u) / np.sqrt(beta_lx)],
-        ]
-        V[2:, :2] = [
-            [np.sqrt(beta_ly) * cos, -np.sqrt(beta_ly) * sin],
-            [
-                (u * sin - alpha_ly * cos) / np.sqrt(beta_ly),
-                (u * cos + alpha_ly * sin) / np.sqrt(beta_ly),
-            ],
-        ]
+        V[0, 0] = np.sqrt(beta_lx)
+        V[0, 1] = 0.0
+        V[1, 0] = -alpha_lx / np.sqrt(beta_lx)
+        V[1, 1] = (1.0 - u) / np.sqrt(beta_lx)
+        V[2, 2] = np.sqrt(beta_ly) * cs
+        V[2, 3] = -np.sqrt(beta_ly) * sn
+        V[3, 2] = (u * sn - alpha_ly * cs) / np.sqrt(beta_ly)
+        V[3, 3] = (u * cs + alpha_ly * sn) / np.sqrt(beta_ly)
     elif mode == 2:
-        V[2:, 2:] = [
-            [np.sqrt(beta_ly), 0],
-            [-alpha_ly / np.sqrt(beta_ly), (1 - u) / np.sqrt(beta_ly)],
-        ]
-        V[:2, 2:] = [
-            [np.sqrt(beta_lx) * cos, -np.sqrt(beta_lx) * sin],
-            [
-                (u * sin - alpha_lx * cos) / np.sqrt(beta_lx),
-                (u * cos + alpha_lx * sin) / np.sqrt(beta_lx),
-            ],
-        ]
+        V[0, 0] = np.sqrt(beta_lx) * cs
+        V[0, 1] = -np.sqrt(beta_lx) * sn
+        V[1, 0] = (u * sn - alpha_lx * cs) / np.sqrt(beta_lx)
+        V[1, 1] = (u * cs + alpha_lx * sn) / np.sqrt(beta_lx)
+        V[2, 2] = np.sqrt(beta_ly)
+        V[2, 3] = 0.0
+        V[3, 2] = -alpha_ly / np.sqrt(beta_ly)
+        V[3, 3] = (1.0 - u) / np.sqrt(beta_ly)
     return V
 
 
@@ -90,26 +85,26 @@ def twiss_from_norm_matrix(V):
     beta_2y = V[2, 2] ** 2
     alpha_1x = -np.sqrt(beta_1x) * V[1, 0]
     alpha_2y = -np.sqrt(beta_2y) * V[3, 2]
-    u = 1.0 - V[0, 0] * V[1, 1]
+    u = 1.0 - (V[0, 0] * V[1, 1])
     nu1 = np.arctan2(-V[2, 1], V[2, 0])
     nu2 = np.arctan2(-V[0, 3], V[0, 2])
     beta_1y = (V[2, 0] / np.cos(nu1)) ** 2
     beta_2x = (V[0, 2] / np.cos(nu2)) ** 2
     alpha_1y = (u * np.sin(nu1) - V[3, 0] * np.sqrt(beta_1y)) / np.cos(nu1)
     alpha_2x = (u * np.sin(nu2) - V[1, 2] * np.sqrt(beta_2x)) / np.cos(nu2)
-    return (
-        alpha_1x,
-        beta_1x,
-        alpha_1y,
-        beta_1y,
-        alpha_2x,
-        beta_2x,
-        alpha_2y,
-        beta_2y,
-        u,
-        nu1,
-        nu2,
-    )
+    return {
+        "alpha_1x": alpha_1x,
+        "alpha_1y": alpha_1y,
+        "alpha_2x": alpha_2x,
+        "alpha_2y": alpha_2y,
+        "beta_1x": beta_1x,
+        "beta_1y": beta_1y,
+        "beta_2x": beta_2x,
+        "beta_2y": beta_2y,
+        "u": u,
+        "nu1": nu1,
+        "nu2": nu2,
+    }
 
 
 def matched_cov(M, *intrinsic_emittances):
@@ -120,7 +115,6 @@ def matched_cov(M, *intrinsic_emittances):
 
 
 def symplectic_diag(self, Sigma):
-    """Symplectic diagonalization of covariance matrix `Sigma`."""
     U = unit_symplectic_matrix(4)
     eigvals, eigvecs = np.linalg.eig(np.matmul(Sigma, U))
     V = norm_matrix_from_eigvecs(eigvecs)
@@ -131,34 +125,31 @@ def symplectic_diag(self, Sigma):
 def cov_from_twiss_one_mode(alpha_lx, alpha_ly, beta_lx, beta_ly, u, nu, eps, mode=1):
     cos, sin = np.cos(nu), np.sin(nu)
     if mode == 1:
-        s11, s33 = beta_lx, beta_ly
-        s12, s34 = -alpha_lx, -alpha_ly
-        s22 = ((1 - u) ** 2 + alpha_lx**2) / beta_lx
+        s11 = beta_lx
+        s33 = beta_ly
+        s12 = -alpha_lx
+        s34 = -alpha_ly
+        s22 = ((1.0 - u) ** 2 + alpha_lx**2) / beta_lx
         s44 = (u**2 + alpha_ly**2) / beta_ly
         s13 = np.sqrt(beta_lx * beta_ly) * cos
         s14 = np.sqrt(beta_lx / beta_ly) * (u * sin - alpha_ly * cos)
-        s23 = -np.sqrt(beta_ly / beta_lx) * ((1 - u) * sin + alpha_lx * cos)
-        s24 = (
-            (alpha_ly * (1 - u) - alpha_lx * u) * sin
-            + (u * (1 - u) + alpha_lx * alpha_ly) * cos
-        ) / np.sqrt(beta_lx * beta_ly)
+        s23 = -np.sqrt(beta_ly / beta_lx) * ((1.0 - u) * sin + alpha_lx * cos)
+        s24 = ((alpha_ly * (1.0 - u) - alpha_lx * u) * sin + (u * (1.0 - u) + alpha_lx * alpha_ly) * cos) / np.sqrt(beta_lx * beta_ly)
     elif mode == 2:
-        s11, s33 = beta_lx, beta_ly
-        s12, s34 = -alpha_lx, -alpha_ly
+        s11 = beta_lx
+        s33 = beta_ly
+        s12 = -alpha_lx
+        s34 = -alpha_ly
         s22 = (u**2 + alpha_lx**2) / beta_lx
-        s44 = ((1 - u) ** 2 + alpha_ly**2) / beta_ly
+        s44 = ((1.0 - u) ** 2 + alpha_ly**2) / beta_ly
         s13 = np.sqrt(beta_lx * beta_ly) * cos
-        s14 = -np.sqrt(beta_lx / beta_ly) * ((1 - u) * sin + alpha_ly * cos)
+        s14 = -np.sqrt(beta_lx / beta_ly) * ((1.0 - u) * sin + alpha_ly * cos)
         s23 = np.sqrt(beta_ly / beta_lx) * (u * sin - alpha_lx * cos)
-        s24 = (
-            (alpha_lx * (1 - u) - alpha_ly * u) * sin
-            + (u * (1 - u) + alpha_lx * alpha_ly) * cos
-        ) / np.sqrt(beta_lx * beta_ly)
-    return eps * np.array(
-        [
+        s24 = ((alpha_lx * (1.0 - u) - alpha_ly * u) * sin + (u * (1.0 - u) + alpha_lx * alpha_ly) * cos) / np.sqrt(beta_lx * beta_ly)
+    Sigma = eps * np.array([
             [s11, s12, s13, s14],
             [s12, s22, s23, s24],
             [s13, s23, s33, s34],
             [s14, s24, s34, s44],
-        ]
-    )
+        ])
+    return Sigma

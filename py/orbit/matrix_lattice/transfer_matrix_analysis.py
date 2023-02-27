@@ -157,8 +157,13 @@ class TransferMatrixAnalysis:
         
     def analyze(self):
         return
+    
+    def matched_cov(self, *intrinsic_emittances):
+        V = self.params["V"]
+        Sigma_n = np.diag(np.repeat(intrinsic_emittances, 2))
+        return np.linalg.multi_dot([V, Sigma_n, V.T])
 
-        
+
 class CourantSnyder(TransferMatrixAnalysis):
     """Courant-Snyder parameterization of uncoupled (transverse) motion."""
     def __init__(self, M):
@@ -202,31 +207,14 @@ class LebedevBogacz(TransferMatrixAnalysis):
         V = np.zeros(eigvecs.shape)
         for i in range(0, V.shape[1], 2):
             V[:, i] = eigvecs[:, i].real
-            V[:, i + 1] = (1j * eigvecs[:, i]).real
+            V[:, i + 1] = (1.0j * eigvecs[:, i]).real
         return V
     
     def analyze(self):
         self.eigvecs = LB.normalize(self.eigvecs)
         self.params['V'] = LB.norm_matrix_from_eigvecs(self.eigvecs)
-        (
-            self.params['alpha_1x'],
-            self.params['beta_1x'],
-            self.params['alpha_1y'],
-            self.params['beta_1y'],
-            self.params['alpha_2x'],
-            self.params['beta_2x'],
-            self.params['alpha_2y'],
-            self.params['beta_2y'],
-            self.params['u'],
-            self.params['nu1'],
-            self.params['nu2'],
-        ) = LB.twiss_from_norm_matrix(self.params['V'])
-        
-    def matched_cov(*intrinsic_emittances):
-        V = self.params['V']
-        Sigma_n = np.diag(np.repeat(intrinsic_emittances, 2))
-        return np.linalg.multi_dot([V, Sigma_n, V.T])
-        
+        self.params.update(**LB.twiss_from_norm_matrix(self.params["V"]))
+                
         
 class EdwardsTeng(TransferMatrixAnalysis):
     

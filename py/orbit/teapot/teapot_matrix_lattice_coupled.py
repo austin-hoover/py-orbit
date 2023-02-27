@@ -88,22 +88,58 @@ class TEAPOT_MATRIX_Lattice_Coupled(MATRIX_Lattice_Coupled):
                 self.matrixGenerator.calculateMatrix(self.bunch, matrix_node.getMatrix())
         self.makeOneTurnMatrix()
 
-    def getRingParametersDict(self):
-        momentum = self.bunch.getSyncParticle().momentum()
-        mass = self.bunch.getSyncParticle().mass()
-        return MATRIX_Lattice_Coupled.getRingParametersDict(self, momentum, mass)
-
+    def getRingParametersDict(self, node=None):
+        return MATRIX_Lattice_Coupled.getRingParametersDict(
+            self, 
+            momentum=self.bunch.getSyncParticle().momentum(), 
+            mass=self.bunch.getSyncParticle().mass(), 
+            node=node,
+        )
+    
     def getRingMatrix(self):
         return MATRIX_Lattice.getOneTurnMatrix(self)
-
+    
     def getRingOrbit(self, z0):
         return self.trackOrbit(z0)
 
     def getRingTwissData(self):
-        return self.trackTwissData()
+        data = dict()
+        data["s"] = []
+        position = 0.0
         
+        def add_data(params):
+            for key, value in params.items():
+                if key not in data:
+                    data[key] = []
+                data[key].append(value)
+            data["s"].append(position)
+
+        add_data(self.getRingParametersDict())
+        for node in self.getNodes():
+            if isinstance(node, BaseMATRIX):
+                position += node.getLength()
+                if node.getLength() > 0.0:                    
+                    add_data(self.getRingParametersDict(node=node))
+                    
+        for key in [
+            "momentum", 
+            "mass", 
+            "kin_energy",
+            "period", 
+            "frequency",
+            "M", 
+            "V",
+            "eigvals", 
+            "eigvecs", 
+            "eigtunes", 
+            "stable", 
+            "coupled", 
+        ]:
+            data.pop(key)
+        return data
+            
     def getRingDispersionData(self):
-        return self.trackDispersionData()
+        raise NotImplementedError
 
     def getChromaticities(self):
         raise NotImplementedError
