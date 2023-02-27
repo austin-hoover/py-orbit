@@ -119,23 +119,7 @@ class TEAPOT_MATRIX_Lattice_Coupled(MATRIX_Lattice_Coupled):
             if isinstance(node, BaseMATRIX):
                 position += node.getLength()
                 if node.getLength() > 0.0:                    
-                    add_data(self.getRingParametersDict(node=node))
-                    
-        for key in [
-            "momentum", 
-            "mass", 
-            "kin_energy",
-            "period", 
-            "frequency",
-            "M", 
-            "V",
-            "eigvals", 
-            "eigvecs", 
-            "eigtunes", 
-            "stable", 
-            "coupled", 
-        ]:
-            data.pop(key)
+                    add_data(self.getRingParametersDict(node=node))                    
         return data
             
     def getRingDispersionData(self):
