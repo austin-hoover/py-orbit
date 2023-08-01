@@ -136,7 +136,7 @@ def env_matrix_to_vector(self, P):
     return P.ravel()
 
 
-class DanilovEnvelope:
+class DanilovEnvelope22:
     """Class for the beam envelope of the Danilov distribution.
 
     Attributes
@@ -626,7 +626,7 @@ class DanilovEnvelope:
             z = np.random.uniform(0, self.length)
             bunch.addParticle(x, xp, y, yp, z, 0.0)
         if nparts > 0:
-            bunch.macroSize(self.intensity / nparts if self.intensity > 0 else 1)
+            bunch.macroSize(self.intensity / nparts if self.intensity > 0.0 else 1.0)
         return bunch, params_dict
 
     def track(self, lattice, nturns=1, ntestparts=0, progbar=False):

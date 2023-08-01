@@ -4,10 +4,11 @@ from orbit.lattice import AccNode
 from orbit.lattice import AccNodeBunchTracker
 from orbit.space_charge.envelope import DanilovEnvSolverNode
 from orbit.space_charge.scLatticeModifications import setSC_General_AccNodes
-from spacecharge import DanilovEnvSolver
 
 
-def setDanilovEnvSolverNodes(lattice=None, perveance=0.0, max_sep=None, min_sep=1.00e-06):
+def setDanilovEnvSolverNodes(
+    lattice=None, calc=None, perveance=0.0, max_sep=None, min_sep=1.00e-06,
+):
     """Place a set of envelope solver nodes into the lattice.
 
     The method will place the set into the lattice as child nodes of
@@ -19,6 +20,8 @@ def setDanilovEnvSolverNodes(lattice=None, perveance=0.0, max_sep=None, min_sep=
     ----------
     lattice : AccLattice
         Lattice in which to insert the nodes.
+    calc : class
+        Space charge calculator (DanilovEnvSolver20, DanilovEnvSolver22, etc.).
     perveance : float
         Dimensionless beam perveance.
     max_sep, min_sep : float
@@ -33,7 +36,7 @@ def setDanilovEnvSolverNodes(lattice=None, perveance=0.0, max_sep=None, min_sep=
         if max_sep and node.getLength() > max_sep:
             node.setnParts(1 + int(node.getLength() / max_sep))
 
-    solver = DanilovEnvSolver(perveance)
+    solver = calc(perveance)
     solver_nodes = setSC_General_AccNodes(lattice, min_sep, solver, DanilovEnvSolverNode)
     for solver_node in solver_nodes:
         name = "".join([solver_node.getName(), ":", "envsolver"])

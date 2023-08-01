@@ -13,17 +13,18 @@
  Physical Review Special Topics - Accelerators and Beams 6, 74–85 (2003).
 */
 
-#ifndef DANILOVENVSOLVER_H
-#define DANILOVENVSOLVER_H
+#ifndef DANILOVENVSOLVER22_H
+#define DANILOVENVSOLVER22_H
 
 #include "Bunch.hh"
 #include "CppPyWrapper.hh"
 
 using namespace std;
 
-class DanilovEnvSolver: public OrbitUtils::CppPyWrapper {
+class DanilovEnvSolver22: public OrbitUtils::CppPyWrapper {
     public:
-        DanilovEnvSolver(double perveance);
+        DanilovEnvSolver22(double perveance);
+    
         void trackBunch(Bunch* bunch, double length);
 
     private:
