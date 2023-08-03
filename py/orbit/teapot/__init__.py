@@ -20,6 +20,7 @@ from teapot import NodeTEAPOT
 from teapot import TPB
 
 from teapot_matrix_lattice import TEAPOT_MATRIX_Lattice
+from teapot_matrix_lattice_coupled import TEAPOT_MATRIX_Lattice_Coupled
 
 __all__ = []
 __all__.append("TEAPOT_Lattice")
@@ -38,4 +39,5 @@ __all__.append("TiltTEAPOT")
 __all__.append("NodeTEAPOT")
 __all__.append("TPB")
 __all__.append("TEAPOT_MATRIX_Lattice")
+__all__.append("TEAPOT_MATRIX_Lattice_Coupled")
 

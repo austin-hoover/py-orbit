@@ -20,38 +20,38 @@ def unit_symplectic_matrix(n=2):
     return U
 
 
-def normalize(eigvecs):
+def normalize(eigenvectors):
     """Normalize transfer matrix eigenvectors.
 
-    eigvecs: ndarray, shape (2n, 2n)
+    eigenvectors: ndarray, shape (2n, 2n)
         Each column is an eigenvector.
     """
-    n = eigvecs.shape[0]
+    n = eigenvectors.shape[0]
     U = unit_symplectic_matrix(n)
     for i in range(0, n, 2):
-        v = eigvecs[:, i]
+        v = eigenvectors[:, i]
         # Find out if we need to swap.
         val = np.linalg.multi_dot([np.conj(v), U, v]).imag
         if val > 0:
-            eigvecs[:, i], eigvecs[:, i + 1] = eigvecs[:, i + 1], eigvecs[:, i]
-        eigvecs[:, i : i + 2] *= np.sqrt(2 / np.abs(val))
-    return eigvecs
+            eigenvectors[:, i], eigenvectors[:, i + 1] = eigenvectors[:, i + 1], eigenvectors[:, i]
+        eigenvectors[:, i : i + 2] *= np.sqrt(2 / np.abs(val))
+    return eigenvectors
 
 
-def normalization_matrix_from_eigvecs(eigvecs, norm=True):
+def normalization_matrix_from_eigenvectors(eigenvectors, norm=True):
     """Construct symplectic normalization matrix.
 
-    eigvecs: ndarray, shape (2n, 2n)
+    eigenvectors: ndarray, shape (2n, 2n)
         Each column is an eigenvector. We assume they are not normalized.
     norm : bool
         If False, assume the eigenvectors are already normalized.
     """
     if norm:
-        eigvecs = normalize(eigvecs.copy())
-    V = np.zeros(eigvecs.shape)
+        eigenvectors = normalize(eigenvectors.copy())
+    V = np.zeros(eigenvectors.shape)
     for i in range(0, V.shape[1], 2):
-        V[:, i] = eigvecs[:, i].real
-        V[:, i + 1] = (1j * eigvecs[:, i]).real
+        V[:, i] = eigenvectors[:, i].real
+        V[:, i + 1] = (1j * eigenvectors[:, i]).real
     return V
 
 
@@ -116,16 +116,16 @@ def twiss_from_normalization_matrix(V):
 
 
 def matched_cov(M, *intrinsic_emittances):
-    eigvals, eigvecs = np.linalg.eig(M)
-    V = normalization_matrix_from_eigvecs(eigvecs)
+    eigenvalues, eigenvectors = np.linalg.eig(M)
+    V = normalization_matrix_from_eigenvectors(eigenvectors)
     Sigma_n = np.diag(np.repeat(intrinsic_emittances, 2))
     return np.linalg.multi_dot([V, Sigma_n, V.T])
 
 
 def symplectic_diag(self, Sigma):
     U = unit_symplectic_matrix(4)
-    eigvals, eigvecs = np.linalg.eig(np.matmul(Sigma, U))
-    V = normalization_matrix_from_eigvecs(eigvecs)
+    eigenvalues, eigenvectors = np.linalg.eig(np.matmul(Sigma, U))
+    V = normalization_matrix_from_eigenvectors(eigenvectors)
     Vinv = np.linalg.inv(V)
     return np.linalg.multi_dot([Vinv, Sigma, Vinv.T])
 
