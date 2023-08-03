@@ -1,3 +1,11 @@
+#ifndef DANILOVENVELOPESOLVER22_H
+#define DANILOVENVELOPESOLVER22_H
+
+#include "Bunch.hh"
+#include "CppPyWrapper.hh"
+
+using namespace std;
+
 /** Envelope solver for the {2, 2} Danilov distribution.
  
  The boundary of the tilted ellipse in real-space can be parameterized as:
@@ -12,20 +20,13 @@
  two dimensional and three dimensional space charge distributions with linear force,
  Physical Review Special Topics - Accelerators and Beams 6, 74–85 (2003).
 */
-
-#ifndef DANILOVENVSOLVER22_H
-#define DANILOVENVSOLVER22_H
-
-#include "Bunch.hh"
-#include "CppPyWrapper.hh"
-
-using namespace std;
-
-class DanilovEnvSolver22: public OrbitUtils::CppPyWrapper {
+class DanilovEnvelopeSolver22: public OrbitUtils::CppPyWrapper {
     public:
-        DanilovEnvSolver22(double perveance);
+        DanilovEnvelopeSolver22(double perveanceQ);
     
         void trackBunch(Bunch* bunch, double length);
+    
+        void setPerveance(double perveance);
 
     private:
         double Q;  // beam perveance

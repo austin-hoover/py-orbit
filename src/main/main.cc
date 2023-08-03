@@ -18,6 +18,7 @@
 #include "wrap_aperture.hh"
 #include "wrap_fieldtracker.hh"
 #include "wrap_impedances.hh"
+#include "wrap_envelope.hh"
 
 /**
  * The main function that will initialize the MPI and will
@@ -69,6 +70,10 @@ int main(int argc, char **argv)
   // Space-charge package
 
   initspacecharge();
+    
+  // Danilov envelope trackers
+    
+  wrap_envelope::initenvelope();
 
   // The python interpreter
   // It will call Py_Initialize() again, but there is no harm.

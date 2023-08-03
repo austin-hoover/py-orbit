@@ -14,6 +14,7 @@ import scipy.optimize as opt
 from tqdm import trange
 
 from bunch import Bunch
+from orbit.envelope import utils
 from orbit.matrix_lattice.parameterizations import courant_snyder as CS
 from orbit.matrix_lattice.parameterizations import lebedev_bogacz as LB
 from orbit.matrix_lattice.transfer_matrix import TransferMatrix
@@ -24,111 +25,9 @@ from orbit.teapot import TEAPOT_MATRIX_Lattice
 from orbit.utils import consts
 
 
-def rotation_matrix(angle):
-    """2 x 2 clockwise rotation matrix (angle in radians)."""
-    c, s = np.cos(angle), np.sin(angle)
-    return np.array([[c, s], [-s, c]])
-
-
-def rotation_matrix_4x4(angle):
-    """4 x 4 matrix to rotate [x, x', y, y'] clockwise in the x-y plane (angle in radians)."""
-    c, s = np.cos(angle), np.sin(angle)
-    return np.array([[c, 0, s, 0], [0, c, 0, s], [-s, 0, c, 0], [0, -s, 0, c]])
-
-
-def phase_advance_matrix(*phase_advances):
-    """Phase advance matrix (clockwise rotation in each phase plane).
-
-    Parameters
-    ---------
-    mu1, mu2, ..., mun : float
-        The phase advance in each plane.
-
-    Returns
-    -------
-    ndarray, shape (2n, 2n)
-        Matrix which rotates x-x', y-y', z-z', etc. by the phase advances.
-    """
-    n = len(phase_advances)
-    M = np.zeros((2 * n, 2 * n))
-    for i, phase_advance in enumerate(phase_advances):
-        i = i * 2
-        M[i : i + 2, i : i + 2] = rotation_matrix(phase_advance)
-    return M
-
-
-def initialize_bunch(mass=None, kin_energy=None):
-    """Create and initialize a Bunch.
-
-    Parameters
-    ----------
-    mass, energy : float
-        Mass [GeV/c^2] and kinetic energy [GeV] per bunch particle.
-
-    Returns
-    -------
-    bunch : Bunch
-        A Bunch object with the given mass and kinetic energy.
-    params_dict : dict
-        Dictionary with reference to Bunch.
-    """
-    bunch = Bunch()
-    bunch.mass(mass)
-    bunch.getSyncParticle().kinEnergy(kin_energy)
-    params_dict = {"bunch": bunch}
-    return bunch, params_dict
-
-
-def get_transfer_matrix(lattice, mass, energy):
-    """Return linear 6x6 transfer matrix from periodic lattice as ndarray.
-
-    Parameters
-    ----------
-    lattice : TEAPOT_Lattice
-        A periodic lattice to track with.
-    mass, energy : float
-        Particle mass [GeV/c^2] and kinetic energy [GeV].
-
-    Returns
-    -------
-    M : ndarray, shape (6, 6)
-        Transverse transfer matrix.
-    """
-    bunch, params_dict = initialize_bunch(mass, energy)
-    matrix_lattice = TEAPOT_MATRIX_Lattice(lattice, bunch)
-    M = np.zeros((6, 6))
-    for i in range(6):
-        for j in range(6):
-            M[i, j] = matrix_lattice.oneTurnMatrix.get(i, j)
-    return M
-
-
 def get_moment_vector(Sigma):
     """Return array of 10 unique elements of covariance matrix."""
     return Sigma[np.triu_indices(4)]
-
-
-def get_perveance(mass, kin_energy, line_density):
-    """ "Compute dimensionless beam perveance.
-
-    Parameters
-    ----------
-    mass : float
-        Mass per particle [GeV/c^2].
-    kin_energy : float
-        Kinetic energy per particle [GeV].
-    line_density : float
-        Number density in longitudinal direction [m^-1].
-
-    Returns
-    -------
-    float
-        Dimensionless space charge perveance
-    """
-    classical_proton_radius = 1.53469e-18  # [m]
-    gamma = 1 + (kin_energy / mass)  # Lorentz factor
-    beta = np.sqrt(1.0 - (1.0 / gamma) ** 2)  # velocity/speed_of_light
-    return (2.0 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
 
 
 def env_matrix_to_vector(self, P):
@@ -227,7 +126,7 @@ class DanilovEnvelope22:
         """Set beam intensity and re-calculate perveance."""
         self.intensity = intensity
         self.line_density = intensity / self.length
-        self.perveance = get_perveance(self.mass, self.kin_energy, self.line_density)
+        self.perveance = utils.get_perveance(self.mass, self.kin_energy, self.line_density)
 
     def set_length(self, length):
         """Set beam length and re-calculate perveance."""
@@ -261,7 +160,7 @@ class DanilovEnvelope22:
 
     def rotate(self, phi):
         """Apply clockwise rotation by phi degrees in x-y space."""
-        self.transform(get_rotation_matrix_4x4(np.radians(phi)))
+        self.transform(utils.rotation_matrix_4x4(np.radians(phi)))
 
     def normalization_matrix(self, kind="2D", inverse=False):
         if kind not in ["2D", "4D"]:
@@ -346,7 +245,7 @@ class DanilovEnvelope22:
         muy = np.radians(muy)
         V = self.normalization_matrix(kind="2D")
         self.transform(
-            np.linalg.multi_dot([V, phase_advance_matrix(mux, muy), np.linalg.inv(V)])
+            np.linalg.multi_dot([V, utils.phase_advance_matrix(mux, muy), np.linalg.inv(V)])
         )
 
     def projected_tilt_angle(self, x1="x", x2="y"):
@@ -560,12 +459,12 @@ class DanilovEnvelope22:
         """
         return np.matmul(self.param_matrix(), [np.cos(psi), np.sin(psi)])
 
-    def generate_dist(self, nparts=1, density="uniform"):
+    def generate_dist(self, n_parts=1, density="uniform"):
         """Generate a distribution of particles from the envelope.
 
         Parameters
         ----------
-        nparts : int
+        n_parts : int
             The number of simulation particles in the distribution.
         density : {'uniform', 'on_ellipse', 'gaussian'}
             How to fill the distribution.
@@ -575,18 +474,18 @@ class DanilovEnvelope22:
 
         Returns
         -------
-        ndarray, shape (nparts, 4)
+        ndarray, shape (n_parts, 4)
             The coordinate array for the distribution.
         """
-        nparts = int(nparts)
-        psis = np.linspace(0, 2 * np.pi, nparts)
+        n_parts = int(n_parts)
+        psis = np.linspace(0, 2 * np.pi, n_parts)
         X = np.array([self.get_particle_coordinates(psi) for psi in psis])
         if density == "uniform":
-            radii = np.sqrt(np.random.random(nparts))
+            radii = np.sqrt(np.random.random(n_parts))
         elif density == "on_ellipse":
-            radii = np.ones(nparts)
+            radii = np.ones(n_parts)
         elif density == "gaussian":
-            radii = np.random.normal(size=nparts)
+            radii = np.random.normal(size=n_parts)
         return radii[:, np.newaxis] * X
 
     def from_bunch(self, bunch):
@@ -596,15 +495,15 @@ class DanilovEnvelope22:
         self.params = np.array([a, b, ap, bp, e, f, ep, fp])
         return self.params
 
-    def to_bunch(self, nparts=0, no_env=False):
+    def to_bunch(self, n_parts=0, no_env=False):
         """Add the envelope parameters to a Bunch object. The first two
         particles represent the envelope parameters.
 
         Parameters
         ----------
-        nparts : int
+        n_parts : int
             The number of particles in the bunch. The bunch will just hold the
-            envelope parameters if nparts == 0.
+            envelope parameters if n_parts == 0.
         no_env : bool
             If True, do not include the envelope parameters in the first
             two bunch particles.
@@ -612,24 +511,27 @@ class DanilovEnvelope22:
         Returns
         -------
         bunch: Bunch object
-            The bunch representing the distribution of size 2 + nparts
+            The bunch representing the distribution of size 2 + n_parts
             (unless `no_env` is True).
         params_dict : dict
             The dictionary of parameters for the bunch.
         """
-        bunch, params_dict = initialize_bunch(self.mass, self.kin_energy)
+        bunch = Bunch()
+        bunch.mass(self.mass)
+        bunch.getSyncParticle().kinEnergy(self.kin_energy)
+        params_dict = {"bunch": bunch}
         if not no_env:
             a, b, ap, bp, e, f, ep, fp = self.params
             bunch.addParticle(a, ap, e, ep, 0.0, 0.0)
             bunch.addParticle(b, bp, f, fp, 0.0, 0.0)
-        for x, xp, y, yp in self.generate_dist(nparts):
+        for x, xp, y, yp in self.generate_dist(n_parts):
             z = np.random.uniform(0, self.length)
             bunch.addParticle(x, xp, y, yp, z, 0.0)
-        if nparts > 0:
-            bunch.macroSize(self.intensity / nparts if self.intensity > 0.0 else 1.0)
+        if n_parts > 0:
+            bunch.macroSize(self.intensity / n_parts if self.intensity > 0.0 else 1.0)
         return bunch, params_dict
 
-    def track(self, lattice, nturns=1, ntestparts=0, progbar=False):
+    def track(self, lattice, n_turns=1, ntestparts=0, progbar=False):
         """Track the envelope through the lattice.
 
         The envelope parameters are updated after it is tracked. If
@@ -637,15 +539,15 @@ class DanilovEnvelope22:
         linear space charge kicks based on the envelope parameters.
         """
         bunch, params_dict = self.to_bunch(ntestparts)
-        turns = trange(nturns) if progbar else range(nturns)
+        turns = trange(n_turns) if progbar else range(n_turns)
         for _ in turns:
             lattice.trackBunch(bunch, params_dict)
         self.from_bunch(bunch)
 
-    def track_store_params(self, lattice, nturns=1):
+    def track_store_params(self, lattice, n_turns=1):
         """Track and return the turn-by-turn envelope parameters."""
         params_tbt = [self.params]
-        for _ in range(nturns):
+        for _ in range(n_turns):
             self.track(lattice)
             params_tbt.append(self.params)
         return params_tbt
@@ -683,7 +585,7 @@ class DanilovEnvelope22:
         # If space charge is zero, we can just use the TEAPOT_MATRIX_Lattice
         # class to calculate the transfer matrix.
         if self.perveance == 0:
-            M = get_transfer_matrix(lattice, self.mass, self.kin_energy)
+            M = utils.get_transfer_matrix(lattice, self.mass, self.kin_energy)
             return M[:4, :4]
 
         # The envelope parameters will change if the beam is not matched to
@@ -749,7 +651,7 @@ class DanilovEnvelope22:
         """
         if solver_nodes is not None:
             for node in solver_nodes:
-                node.switcher = False
+                node.active = False
 
         # Get linear transfer matrix
         M = self.get_transfer_matrix(lattice)
@@ -789,56 +691,9 @@ class DanilovEnvelope22:
 
         if solver_nodes is not None:
             for node in solver_nodes:
-                node.switcher = True
+                node.active = True
 
         return self.params
-
-    def match(self, lattice, solver_nodes=None, method="auto", tol=1.00e-04, **kws):
-        """Match the envelope to the lattice.
-
-        lattice : TEAPOT_Lattice
-            The lattice to match to.
-        solver_nodes : list[DanilovEnvSolver]
-            A list of envelope solver nodes.
-        method : {'auto', 'lsq', 'replace_avg'}
-            The matching method to use (defined in the functions below). If
-            'auto', the 'lsq' method will be tried first. If the final cost
-            function is above `tol`, then it will try the 'replace_avg' method.
-            Usually 'lsq' will work just fine, but I found that a lattice with
-            skew quadrupoles can result in a matched beam which has an x-y
-            correlation coefficient of +1 or -1 (nu = 0 or pi). The 'lsq'
-            method can fail in this case. Details are found in [1] (see the
-            top of this module).
-        tol : float
-            If the final cost function of the 'lsq' method is above `tol`, the
-            the 'replace_avg' method will be tried.
-        **kws
-            Key word arguments for the matching method.
-        """
-        if self.perveance == 0:
-            return self.match_bare(lattice, "auto", solver_nodes)
-
-        def initialize():
-            self.set_twiss_4d(u=0.5)
-            self.set_twiss_4d(nu=(0.5 * np.pi))
-            self.match_bare(lattice, "2D", solver_nodes)
-
-        initialize()
-
-        if method == "lsq":
-            return self._match_lsq(lattice, **kws)
-        elif method == "replace_avg":
-            return self._match_replace_avg(lattice, **kws)
-        elif method == "auto":
-            result = self._match_lsq(lattice, **kws)
-            if result.cost > tol:
-                print("Cost = {:.2e} > tol.".format(result.cost))
-                print("Trying 'replace by average' method.")
-                initialize()
-                result = self._match_replace_avg(lattice, **kws)
-            return result
-        else:
-            raise ValueError("Invalid method! Options: {'lsq', 'replace_avg', 'auto'}")
 
     def _residuals(self, lattice, factor=1.0e6):
         """Return initial minus final beam moments after tracking.
@@ -850,7 +705,7 @@ class DanilovEnvelope22:
         Sigma1 = env.cov()
         return factor * get_moment_vector(Sigma1 - Sigma0)
 
-    def _match_lsq(self, lattice, **kws):
+    def match_lsq(self, lattice, **kws):
         """Compute matched envelope using scipy.least_squares optimizer.
 
         Parameters
@@ -874,7 +729,6 @@ class DanilovEnvelope22:
             self.set_twiss_4d_vector(twiss_params)
             return self._residuals(lattice)
 
-        print(self.twiss_4d_lb, self.twiss_4d_ub)
         result = opt.least_squares(
             cost_func,
             self.twiss_4d(),
@@ -884,10 +738,10 @@ class DanilovEnvelope22:
         self.set_twiss_4d_vector(result.x)
         return result
 
-    def _match_replace_avg(
+    def match_replace_avg(
         self,
         lattice,
-        nturns_avg=15,
+        n_turns_avg=15,
         max_iters=100,
         tol=1.0e-6,
         ftol=1.0e-8,
@@ -908,7 +762,7 @@ class DanilovEnvelope22:
         lattice : TEAPOT_Lattice object
             The lattice to match into. The solver nodes should already be in
             place.
-        nturns_avg : int
+        n_turns_avg : int
             Number of turns to average over when updating the parameter vector.
         max_iters : int
             Maximum number of iterations to perform.
@@ -926,10 +780,36 @@ class DanilovEnvelope22:
                 * 1 : display a termination report
                 * 2 : display progress during iterations
         """
+        class MatchingResult:
+            def __init__(self, p, cost, iters, runtime, message, history):
+                self.p = p
+                self.cost = cost
+                self.iters = iters
+                self.time = runtime
+                self.message = message
+                self.history = np.array(history)
+
+        def print_header():
+            print(
+                "{0:^15}{1:^15}{2:^15}{3:^15}".format(
+                    "Iteration", "Cost", "Cost reduction", "Step norm"
+                )
+            )
+
+        def print_iteration(iteration, cost, cost_reduction, step_norm):
+            if cost_reduction is None:
+                cost_reduction = " " * 15
+            else:
+                cost_reduction = "{0:^15.3e}".format(cost_reduction)
+            if step_norm is None:
+                step_norm = " " * 15
+            else:
+                step_norm = "{0:^15.2e}".format(step_norm)
+            print("{0:^15}{1:^15.4e}{2}{3}".format(iteration, cost, cost_reduction, step_norm))
 
         def get_avg_p():
             p_tracked = []
-            for _ in range(nturns_avg + 1):
+            for _ in range(n_turns_avg + 1):
                 p_tracked.append(self.twiss_4d())
                 self.track(lattice)
             return np.mean(p_tracked, axis=0)
@@ -977,6 +857,53 @@ class DanilovEnvelope22:
             print("   cost = {:.4e}".format(cost))
             print("   iters = {}".format(iteration))
         return MatchingResult(p, cost, iteration, t_end - t_start, message, history)
+    
+    def match(self, lattice, solver_nodes=None, method="auto", tol=1.00e-04, **kws):
+        """Match the envelope to the lattice.
+
+        lattice : TEAPOT_Lattice
+            The lattice to match to.
+        solver_nodes : list[DanilovEnvSolver]
+            A list of envelope solver nodes.
+        method : {'auto', 'lsq', 'replace_avg'}
+            The matching method to use (defined in the functions below). If
+            'auto', the 'lsq' method will be tried first. If the final cost
+            function is above `tol`, then it will try the 'replace_avg' method.
+            Usually 'lsq' will work just fine, but I found that a lattice with
+            skew quadrupoles can result in a matched beam which has an x-y
+            correlation coefficient of +1 or -1 (nu = 0 or pi). The 'lsq'
+            method can fail in this case. Details are found in [1] (see the
+            top of this module).
+        tol : float
+            If the final cost function of the 'lsq' method is above `tol`, the
+            the 'replace_avg' method will be tried.
+        **kws
+            Key word arguments for the matching method.
+        """
+        if self.perveance == 0:
+            return self.match_bare(lattice, "auto", solver_nodes)
+
+        def initialize():
+            self.set_twiss_4d(u=0.5)
+            self.set_twiss_4d(nu=(0.5 * np.pi))
+            self.match_bare(lattice, "2D", solver_nodes)
+
+        initialize()
+
+        if method == "lsq":
+            return self.match_lsq(lattice, **kws)
+        elif method == "replace_avg":
+            return self.match_replace_avg(lattice, **kws)
+        elif method == "auto":
+            result = self.match_lsq(lattice, **kws)
+            if result.cost > tol:
+                print("Cost = {:.2e} > tol.".format(result.cost))
+                print("Trying 'replace by average' method.")
+                initialize()
+                result = self.match_replace_avg(lattice, **kws)
+            return result
+        else:
+            raise ValueError("Invalid method! Options: {'lsq', 'replace_avg', 'auto'}")
 
     def perturb_twiss(self, radius=0.1):
         """Randomly perturb the 4D Twiss parameters."""
@@ -1011,34 +938,3 @@ class DanilovEnvelope22:
         print("  nu = {:} [deg]".format(np.degrees(nu)))
         print("  eps_1 = {:} [mm*mrad]".format(1.00e06 * eps_1))
         print("  eps_2 = {:} [mm*mrad]".format(1.00e06 * eps_2))
-
-
-class MatchingResult:
-    """Class to store the results of custom matching algorithm"""
-
-    def __init__(self, p, cost, iters, runtime, message, history):
-        self.p, self.cost, self.iters, self.time = p, cost, iters, runtime
-        self.message = message
-        self.history = np.array(history)
-
-
-def print_header():
-    print(
-        "{0:^15}{1:^15}{2:^15}{3:^15}".format(
-            "Iteration", "Cost", "Cost reduction", "Step norm"
-        )
-    )
-
-
-def print_iteration(iteration, cost, cost_reduction, step_norm):
-    if cost_reduction is None:
-        cost_reduction = " " * 15
-    else:
-        cost_reduction = "{0:^15.3e}".format(cost_reduction)
-
-    if step_norm is None:
-        step_norm = " " * 15
-    else:
-        step_norm = "{0:^15.2e}".format(step_norm)
-
-    print("{0:^15}{1:^15.4e}{2}{3}".format(iteration, cost, cost_reduction, step_norm))

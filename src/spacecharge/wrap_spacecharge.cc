@@ -16,7 +16,6 @@
 #include "wrap_lspacechargecalc.hh"
 #include "wrap_uniform_ellipsoid_field_calculator.hh"
 #include "wrap_spacechargecalc_uniform_ellipse.hh"
-#include "wrap_danilovenvsolver22.hh"
 
 static PyMethodDef spacechargeMethods[] = { {NULL,NULL} };
 
@@ -43,7 +42,6 @@ extern "C" {
 		wrap_spacecharge::initUniformEllipsoidFieldCalculator(module);
 		wrap_spacecharge::initSpaceChargeCalcUniformEllipse(module);
 		wrap_lspacechargecalc::initLSpaceChargeCalc(module);
-		wrap_spacecharge::initDanilovEnvSolver22(module);
   }
 	
 	PyObject* getSpaceChargeType(const char* name){
