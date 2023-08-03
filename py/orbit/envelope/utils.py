@@ -86,3 +86,40 @@ def get_perveance(mass=None, kin_energy=None, line_density=None):
     gamma = 1.0 + (kin_energy / mass)  # Lorentz factor
     beta = np.sqrt(1.0 - (1.0 / gamma) ** 2)  # velocity/speed_of_light
     return (2.0 * classical_proton_radius * line_density) / (beta**2 * gamma**3)
+
+
+def emittance_2x2(Sigma):
+    """RMS emittance from u-u' covariance matrix.
+
+    Parameters
+    ----------
+    Sigma : ndaray, shape (2, 2)
+        The covariance matrix for position u and momentum u' [[<uu>, <uu'>], [<uu'>, <u'u'>]].
+
+    Returns
+    -------
+    float
+        The RMS emittance (sqrt(<uu><u'u'> - <uu'>^2)).
+    """
+    return np.sqrt(np.linalg.det(Sigma))
+
+
+def twiss_2x2(Sigma):
+    """RMS Twiss parameters from 2 x 2 covariance matrix.
+
+    Parameters
+    ----------
+    Sigma : ndaray, shape (2, 2)
+        The covariance matrix for position u and momentum u' [[<uu>, <uu'>], [<uu'>, <u'u'>]].
+
+    Returns
+    -------
+    alpha : float
+        The alpha parameter (-<uu'> / sqrt(<uu><u'u'> - <uu'>^2)).
+    beta : float
+        The beta parameter (<uu> / sqrt(<uu><u'u'> - <uu'>^2)).
+    """
+    eps = emittance_2x2(Sigma)
+    beta = Sigma[0, 0] / eps
+    alpha = -Sigma[0, 1] / eps
+    return alpha, beta

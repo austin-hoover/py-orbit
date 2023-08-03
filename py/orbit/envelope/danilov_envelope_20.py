@@ -18,6 +18,8 @@ from orbit.teapot import TEAPOT_Lattice
 from orbit.teapot import TEAPOT_MATRIX_Lattice
 from orbit.utils import consts
 
+import utils
+
 
 class DanilovEnvelope20:
     """Class for the beam envelope of the Danilov distribution.
@@ -29,7 +31,7 @@ class DanilovEnvelope20:
     eps_x : float
         The rms emittance of the x-x' distribution: sqrt(<xx><x'x'> - <xx'><xx'>).
     eps_y : float
-        The rms emittance of the x-x' distribution: sqrt(<xx><x'x'> - <xx'><xx'>).
+        The rms emittance of the y-y' distribution: sqrt(<yy><y'y'> - <yy'><yy'>).
     mass : float
         Mass per particle [GeV/c^2].
     kin_energy : float
@@ -85,13 +87,28 @@ class DanilovEnvelope20:
         self.length = length
         self.set_intensity(self.intensity)
         
+    def cov(self):
+        """Return 4 x 4 transverse covariance matrix.
+        
+        See Table II here: https://journals.aps.org/prab/abstract/10.1103/PhysRevSTAB.7.024801.
+        Note the typo for <xx'> and <yy>, the first time should be rx'^2 not rx^2.
+        """
+        (cx, cxp, cy, cyp) = self.params
+        Sigma = np.zeros((4, 4))
+        Sigma[0, 0] = cx ** 2
+        Sigma[2, 2] = cy ** 2
+        Sigma[0, 1] = cx * cxp
+        Sigma[2, 3] = cy * cyp
+        Sigma[1, 1] = cxp**2 + (self.eps_x / cx)**2
+        Sigma[3, 3] = cyp**2 + (self.eps_y / cy)**2
+        Sigma = Sigma * 0.25
+        return Sigma
+    
     def twiss(self):
-        """Return 4 x 4 transverse covariance matrix."""
-        cx, cxp, cy, cyp = self.params
-        beta_x = cx**2 / self.eps_x
-        beta_y = cy**2 / self.eps_y
-        alpha_x = -cx * cxp / self.eps_x
-        alpha_y = -cy * cyp / self.eps_y
+        """Return (alpha_x, beta_x, alpha_y, beta_y)."""
+        Sigma = self.cov()
+        alpha_x, beta_x = utils.twiss_2x2(Sigma[:2, :2])
+        alpha_y, beta_y = utils.twiss_2x2(Sigma[2:, 2:])
         return (alpha_x, beta_x, alpha_y, beta_y)        
 
     def from_bunch(self, bunch):
@@ -259,23 +276,22 @@ class DanilovEnvelope20:
         alpha_y = tmat.params["alpha_y"]
         beta_x = tmat.params["beta_x"]
         beta_y = tmat.params["beta_y"]
-        cx = np.sqrt(beta_x * self.eps_x)
-        cy = np.sqrt(beta_y * self.eps_y)
-        cxp = -self.eps_x * alpha_x / cx
-        cyp = -self.eps_x * alpha_y / cy
-        self.params = np.array([cx, cxp, cy, cyp])
+        sig_xx = self.eps_x_rms * beta_x 
+        sig_yy = self.eps_y_rms * beta_y
+        sig_xxp = -self.eps_x_rms * alpha_x
+        sig_yyp = -self.eps_y_rms * alpha_y
+        cx = 2.0 * np.sqrt(sig_xx)
+        cy = 2.0 * np.sqrt(sig_yy)
+        cxp = 4.0 * sig_xxp / cx
+        cyp = 4.0 * sig_yyp / cy
+        self.set_params([cx, cxp, cy, cyp])
 
         if solver_nodes is not None:
             for node in solver_nodes:
                 node.active = True
                 
         return self.params
-    
-    def match(self, lattice, solver_nodes=None, method="lsq", **kws):
-        self.match_bare(lattice, solver_nodes=solver_nodes)
-        if method == "lsq":
-            return self._match_lsq(lattice, **kws)
-    
+        
     def match_lsq(self, lattice, **kws):
         """Compute matched envelope using scipy.least_squares optimizer.
 
@@ -314,6 +330,9 @@ class DanilovEnvelope20:
         return result
     
     def match_lsq_ramp_intensity(self, lattice, solver_nodes=None, n_steps=10, **kws):
+        self.match_bare(lattice, solver_nodes=solver_nodes)
+        if self.perveance == 0.0:
+            return
         verbose = kws.get("verbose", 0)
         max_intensity = self.intensity
         for intensity in np.linspace(0.0, max_intensity, n_steps):

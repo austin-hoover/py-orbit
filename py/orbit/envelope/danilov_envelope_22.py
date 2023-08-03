@@ -24,6 +24,8 @@ from orbit.teapot import TEAPOT_Lattice
 from orbit.teapot import TEAPOT_MATRIX_Lattice
 from orbit.utils import consts
 
+import utils
+
 
 def get_moment_vector(Sigma):
     """Return array of 10 unique elements of covariance matrix."""
