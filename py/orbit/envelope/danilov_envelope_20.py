@@ -330,7 +330,6 @@ class DanilovEnvelope20:
         return result
     
     def match_lsq_ramp_intensity(self, lattice, solver_nodes=None, n_steps=10, **kws):
-        self.match_bare(lattice, solver_nodes=solver_nodes)
         if self.perveance == 0.0:
             return
         verbose = kws.get("verbose", 0)
