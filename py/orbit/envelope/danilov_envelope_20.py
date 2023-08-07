@@ -28,9 +28,9 @@ class DanilovEnvelope20:
     ----------
     params : ndarray, shape(4,)
         The envelope parameters [cx, cx', cy, cy'].
-    eps_x : float
+    eps_x_rms : float
         The rms emittance of the x-x' distribution: sqrt(<xx><x'x'> - <xx'><xx'>).
-    eps_y : float
+    eps_y_rms : float
         The rms emittance of the y-y' distribution: sqrt(<yy><y'y'> - <yy'><yy'>).
     mass : float
         Mass per particle [GeV/c^2].
@@ -45,18 +45,15 @@ class DanilovEnvelope20:
     """
     def __init__(
         self,
-        eps_x=1.0,
-        eps_y=1.0,
+        eps_x_rms=1.0,
+        eps_y_rms=1.0,
         mass=consts.mass_proton,
         kin_energy=1.0,
         length=1.0,
         intensity=0.0,
         params=None,
     ):
-        self.eps_x_rms = eps_x
-        self.eps_y_rms = eps_y
-        self.eps_x = 4.0 * eps_x
-        self.eps_y = 4.0 * eps_y
+        self.set_rms_emittance(eps_x_rms, eps_y_rms)
         self.mass = mass
         self.kin_energy = kin_energy
         self.length = length
@@ -69,8 +66,14 @@ class DanilovEnvelope20:
             self.params = params
         self.params = np.array(self.params)
         
+    def set_rms_emittance(self, eps_x_rms, eps_y_rms):
+        self.eps_x_rms = eps_x_rms
+        self.eps_y_rms = eps_y_rms
+        self.eps_x = 4.0 * eps_x_rms
+        self.eps_y = 4.0 * eps_y_rms
+        
     def set_params(self, params):
-        self.params[:] = params
+        self.params[:] = params        
         
     def copy(self):
         """Produced a deep copy of the envelope."""
@@ -97,12 +100,23 @@ class DanilovEnvelope20:
         Sigma = np.zeros((4, 4))
         Sigma[0, 0] = cx ** 2
         Sigma[2, 2] = cy ** 2
-        Sigma[0, 1] = cx * cxp
-        Sigma[2, 3] = cy * cyp
         Sigma[1, 1] = cxp**2 + (self.eps_x / cx)**2
         Sigma[3, 3] = cyp**2 + (self.eps_y / cy)**2
+        Sigma[0, 1] = Sigma[1, 0] = cx * cxp
+        Sigma[2, 3] = Sigma[3, 2] = cy * cyp
         Sigma = Sigma * 0.25
         return Sigma
+    
+    def set_cov(self, Sigma):
+        """Set envelope parameters from 4 x 4 transverse covariance matrix."""
+        eps_x = np.sqrt(np.linalg.det(Sigma[0:2, 0:2]))
+        eps_y = np.sqrt(np.linalg.det(Sigma[2:4, 2:4]))
+        cx = 2.0 * np.sqrt(Sigma[0, 0])
+        cy = 2.0 * np.sqrt(Sigma[2, 2])
+        cxp = 4.0 * Sigma[0, 1] / cx
+        cyp = 4.0 * Sigma[2, 3] / cy
+        self.set_params([cx, cxp, cy, cyp])
+        self.set_rms_emittance(eps_x, eps_y)
     
     def twiss(self):
         """Return (alpha_x, beta_x, alpha_y, beta_y)."""
